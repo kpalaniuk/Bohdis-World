@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { X, Palette, Zap, Check } from 'lucide-react';
-import { useUser } from '@clerk/nextjs';
 import { PixelButton } from '@/components/ui/PixelButton';
 import { CoinDisplay } from '@/components/ui/CoinDisplay';
 import { useCoinStore } from '@/stores/coinStore';
 import { useUnlockStore, AVAILABLE_THEMES, AVAILABLE_POWERUPS } from '@/stores/unlockStore';
 import { useGameStore, GameTheme } from '@/stores/gameStore';
-import { saveUserProgress } from '@/lib/syncProgress';
+import { saveUserProgress, createAuthUserId } from '@/lib/syncProgress';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CoinShopProps {
   isOpen: boolean;
@@ -16,8 +16,16 @@ interface CoinShopProps {
 }
 
 export function CoinShop({ isOpen, onClose }: CoinShopProps) {
-  const { user, isSignedIn } = useUser();
+  const { user, isSignedIn, authMethod } = useAuth();
   const { coins, spendCoins } = useCoinStore();
+
+  // Create auth user ID for database operations
+  const authUserId = useMemo(() => {
+    if (user && authMethod) {
+      return createAuthUserId(authMethod, user.id);
+    }
+    return null;
+  }, [user, authMethod]);
   const { unlockedThemes, ownedPowerUps, unlockTheme, purchasePowerUp, hasTheme } = useUnlockStore();
   const { currentTheme, setTheme } = useGameStore();
   
@@ -36,8 +44,8 @@ export function CoinShop({ isOpen, onClose }: CoinShopProps) {
       setPurchaseMessage(`Theme "${themeId}" unlocked!`);
       
       // Save to cloud
-      if (isSignedIn && user?.id) {
-        saveUserProgress(user.id, {
+      if (isSignedIn && authUserId) {
+        saveUserProgress(authUserId, {
           coins: coins - price,
           unlockedThemes: [...unlockedThemes, themeId],
         });
@@ -55,8 +63,8 @@ export function CoinShop({ isOpen, onClose }: CoinShopProps) {
       setPurchaseMessage(`Power-up purchased!`);
       
       // Save to cloud
-      if (isSignedIn && user?.id) {
-        saveUserProgress(user.id, {
+      if (isSignedIn && authUserId) {
+        saveUserProgress(authUserId, {
           coins: coins - price,
           ownedPowerUps,
         });

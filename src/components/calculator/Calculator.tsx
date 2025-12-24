@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Delete, RotateCcw } from 'lucide-react';
-import { saveCalculation, getCalculationHistory } from '@/lib/syncProgress';
+import { saveCalculation, getCalculationHistory, createAuthUserId } from '@/lib/syncProgress';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface HistoryItem {
   expression: string;
@@ -11,18 +11,26 @@ interface HistoryItem {
 }
 
 export function Calculator() {
-  const { user, isSignedIn } = useUser();
+  const { user, isSignedIn, authMethod } = useAuth();
   const [display, setDisplay] = useState('0');
   const [expression, setExpression] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isNewCalculation, setIsNewCalculation] = useState(true);
   const [showScientific, setShowScientific] = useState(true);
 
+  // Create auth user ID for database operations
+  const authUserId = useMemo(() => {
+    if (user && authMethod) {
+      return createAuthUserId(authMethod, user.id);
+    }
+    return null;
+  }, [user, authMethod]);
+
   // Load history on mount
   useEffect(() => {
     async function loadHistory() {
-      if (isSignedIn && user?.id) {
-        const cloudHistory = await getCalculationHistory(user.id, 5);
+      if (isSignedIn && authUserId) {
+        const cloudHistory = await getCalculationHistory(authUserId, 5);
         if (cloudHistory.length > 0) {
           setHistory(cloudHistory.map(h => ({ expression: h.expression, result: h.result })));
         }
@@ -35,7 +43,7 @@ export function Calculator() {
       }
     }
     loadHistory();
-  }, [isSignedIn, user?.id]);
+  }, [isSignedIn, authUserId]);
 
   // Save history
   const saveHistory = useCallback((expr: string, result: string) => {
@@ -43,12 +51,12 @@ export function Calculator() {
     const newHistory = [newItem, ...history].slice(0, 5);
     setHistory(newHistory);
 
-    if (isSignedIn && user?.id) {
-      saveCalculation(user.id, expr, result);
+    if (isSignedIn && authUserId) {
+      saveCalculation(authUserId, expr, result);
     } else {
       localStorage.setItem('calc-history', JSON.stringify(newHistory));
     }
-  }, [history, isSignedIn, user?.id]);
+  }, [history, isSignedIn, authUserId]);
 
   // Handle number input
   const inputNumber = useCallback((num: string) => {

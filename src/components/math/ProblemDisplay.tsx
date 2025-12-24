@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { Lightbulb, RefreshCw, Check, X } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Lightbulb, RefreshCw, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Problem, GradeLevel, GRADE_CONFIG, generateProblem, checkAnswer } from './ProblemGenerator';
 import { PixelButton } from '@/components/ui/PixelButton';
 import { useCoinStore } from '@/stores/coinStore';
-import { saveUserProgress, saveMathAttempt } from '@/lib/syncProgress';
+import { saveUserProgress, saveMathAttempt, createAuthUserId } from '@/lib/syncProgress';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProblemDisplayProps {
   level: GradeLevel;
@@ -15,8 +15,16 @@ interface ProblemDisplayProps {
 }
 
 export function ProblemDisplay({ level, onOpenShop }: ProblemDisplayProps) {
-  const { user, isSignedIn } = useUser();
+  const { user, isSignedIn, authMethod } = useAuth();
   const { coins, totalEarned, addCoins } = useCoinStore();
+
+  // Create auth user ID for database operations
+  const authUserId = useMemo(() => {
+    if (user && authMethod) {
+      return createAuthUserId(authMethod, user.id);
+    }
+    return null;
+  }, [user, authMethod]);
   
   const [problem, setProblem] = useState<Problem | null>(null);
   const [userAnswer, setUserAnswer] = useState('');
@@ -95,16 +103,16 @@ export function ProblemDisplay({ level, onOpenShop }: ProblemDisplayProps) {
       }
 
       // Save to cloud
-      if (isSignedIn && user?.id) {
-        saveUserProgress(user.id, { coins, totalEarned: totalEarned + config.coins });
-        saveMathAttempt(user.id, level, problem.question, userAnswer, problem.displayAnswer, true, config.coins);
+      if (isSignedIn && authUserId) {
+        saveUserProgress(authUserId, { coins, totalEarned: totalEarned + config.coins });
+        saveMathAttempt(authUserId, level, problem.question, userAnswer, problem.displayAnswer, true, config.coins);
       }
     } else {
       setStreak(0);
       
       // Save failed attempt
-      if (isSignedIn && user?.id) {
-        saveMathAttempt(user.id, level, problem.question, userAnswer, problem.displayAnswer, false, 0);
+      if (isSignedIn && authUserId) {
+        saveMathAttempt(authUserId, level, problem.question, userAnswer, problem.displayAnswer, false, 0);
       }
     }
 

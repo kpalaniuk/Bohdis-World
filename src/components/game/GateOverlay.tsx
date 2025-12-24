@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useGameStore } from '@/stores/gameStore';
-import { useUser } from '@clerk/nextjs';
-import { loadUserProgress, saveUserProgress } from '@/lib/syncProgress';
+import { useAuth } from '@/contexts/AuthContext';
+import { loadUserProgress, saveUserProgress, createAuthUserId } from '@/lib/syncProgress';
 import confetti from 'canvas-confetti';
 
 interface GateOverlayProps {
@@ -11,7 +11,7 @@ interface GateOverlayProps {
 }
 
 export function GateOverlay({ onUnlock }: GateOverlayProps) {
-  const { user, isSignedIn } = useUser();
+  const { user, isSignedIn, authMethod } = useAuth();
   const { 
     jumpCount, 
     unlockSite, 
@@ -23,12 +23,20 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
   const [showUnlockAnimation, setShowUnlockAnimation] = useState(false);
   const hasUnlockedRef = useRef(false);
 
+  // Create auth user ID for database operations
+  const authUserId = useMemo(() => {
+    if (user && authMethod) {
+      return createAuthUserId(authMethod, user.id);
+    }
+    return null;
+  }, [user, authMethod]);
+
   // Check if returning user should skip gate
   useEffect(() => {
     async function checkReturningUser() {
-      if (isSignedIn && user?.id) {
+      if (isSignedIn && authUserId) {
         try {
-          const { profile } = await loadUserProgress(user.id);
+          const { profile } = await loadUserProgress(authUserId);
           if (profile?.has_completed_gate) {
             setGateCompleted(true);
             onUnlock();
@@ -50,7 +58,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
     }
 
     checkReturningUser();
-  }, [isSignedIn, user?.id, hasCompletedGateEver, setGateCompleted, unlockSite, onUnlock]);
+  }, [isSignedIn, authUserId, hasCompletedGateEver, setGateCompleted, unlockSite, onUnlock]);
 
   // Watch for gate completion via jumpCount
   useEffect(() => {
@@ -69,8 +77,8 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
       });
 
       // Save to cloud if signed in
-      if (isSignedIn && user?.id) {
-        saveUserProgress(user.id, { hasCompletedGate: true });
+      if (isSignedIn && authUserId) {
+        saveUserProgress(authUserId, { hasCompletedGate: true });
       }
 
       // Delay unlock for animation
@@ -79,7 +87,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
         onUnlock();
       }, 1500);
     }
-  }, [jumpCount, isSignedIn, user?.id, unlockSite, onUnlock]);
+  }, [jumpCount, isSignedIn, authUserId, unlockSite, onUnlock]);
 
   if (isChecking) {
     return (
