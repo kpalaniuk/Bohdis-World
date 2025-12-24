@@ -3,12 +3,19 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calculator, Brain, Menu, X, Gamepad2 } from 'lucide-react';
+import { Home, Calculator, Brain, Menu, X, Gamepad2, LucideIcon } from 'lucide-react';
 import { CoinDisplay } from './ui/CoinDisplay';
 import { UserButton } from './auth/UserButton';
 import { useGameStore } from '@/stores/gameStore';
 
-const navLinks = [
+interface NavLink {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  disabled?: boolean;
+}
+
+const navLinks: NavLink[] = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/calculator', label: 'Calc', icon: Calculator },
   { href: '/math', label: 'Math', icon: Brain },
