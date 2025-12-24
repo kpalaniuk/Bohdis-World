@@ -1,65 +1,133 @@
-import Image from "next/image";
+'use client';
+
+import Link from 'next/link';
+import { Calculator, Brain, Gamepad2 } from 'lucide-react';
+import { PixelCard } from '@/components/ui/PixelCard';
+import { PixelButton } from '@/components/ui/PixelButton';
+import { PixelFrame } from '@/components/ui/PixelFrame';
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen flex items-center justify-center p-4 md:p-8">
+      <PixelCard 
+        variant="glass" 
+        padding="lg" 
+        className="max-w-2xl w-full mx-auto"
+      >
+        {/* Hero Section */}
+        <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
+          {/* Profile Image */}
+          <div className="flex-shrink-0">
+            <PixelFrame
+              src="/bohdi.jpg"
+              alt="Bohdi"
+              width={180}
+              height={180}
+              frameColor="green"
+              frameWidth="thick"
+            />
+          </div>
+
+          {/* Bio */}
+          <div className="text-center md:text-left">
+            <h1 
+              className="font-pixel text-foamy-green text-xl md:text-2xl mb-4"
+              style={{ textShadow: '3px 3px 0px #2d2d2d' }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              HEY, I&apos;M BOHDI!
+            </h1>
+            
+            <p className="font-lcd text-white text-lg md:text-xl leading-relaxed">
+              I&apos;m <span className="text-ocean-blue font-bold">8 years old</span> and 
+              I live in <span className="text-foamy-green">San Diego</span>. I&apos;m into 
+              soccer, piano, gymnastics, Jiu Jitsu, and making stuff with my dad.
+            </p>
+            
+            <p className="font-lcd text-gray-300 text-lg mt-4">
+              I built this website to share some tools I think are cool — like a 
+              calculator and math games where you can earn coins. Try jumping over 
+              the obstacles in the background with{' '}
+              <kbd className="px-2 py-1 bg-ocean-blue text-white font-pixel text-xs border-2 border-pixel-black">
+                SPACE
+              </kbd>{' '}
+              while you&apos;re here!
+            </p>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t-4 border-pixel-shadow my-6" />
+
+        {/* Quick Links */}
+        <div className="space-y-4">
+          <h2 
+            className="font-pixel text-ocean-blue text-sm text-center mb-6"
+            style={{ textShadow: '2px 2px 0px #2d2d2d' }}
+          >
+            CHECK OUT MY STUFF
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Calculator */}
+            <Link href="/calculator" className="block">
+              <PixelButton
+                variant="primary"
+                size="lg"
+                icon={Calculator}
+                className="w-full"
+              >
+                Calculator
+              </PixelButton>
+            </Link>
+
+            {/* Math Challenge */}
+            <Link href="/math" className="block">
+              <PixelButton
+                variant="secondary"
+                size="lg"
+                icon={Brain}
+                className="w-full"
+              >
+                Math
+              </PixelButton>
+            </Link>
+
+            {/* Future Game (disabled) */}
+            <PixelButton
+              variant="ghost"
+              size="lg"
+              icon={Gamepad2}
+              disabled
+              className="w-full opacity-50"
+              title="Coming Soon!"
             >
-              Learning
-            </a>{" "}
-            center.
+              Game
+            </PixelButton>
+          </div>
+
+          <p className="text-center font-lcd text-gray-500 text-sm mt-4">
+            Earn coins by solving math problems and spend them on game themes!
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Fun stats */}
+        <div className="mt-8 pt-6 border-t-4 border-pixel-shadow">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="font-pixel text-foamy-green text-lg">8</div>
+              <div className="font-lcd text-gray-400 text-sm">Years Old</div>
+            </div>
+            <div>
+              <div className="font-pixel text-ocean-blue text-lg">5+</div>
+              <div className="font-lcd text-gray-400 text-sm">Hobbies</div>
+            </div>
+            <div>
+              <div className="font-pixel text-sunset-orange text-lg">∞</div>
+              <div className="font-lcd text-gray-400 text-sm">Fun Level</div>
+            </div>
+          </div>
         </div>
-      </main>
+      </PixelCard>
     </div>
   );
 }
