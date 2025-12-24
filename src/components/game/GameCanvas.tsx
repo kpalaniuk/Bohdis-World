@@ -31,7 +31,7 @@ const OBSTACLE_INTERVAL_MAX = 150;
 
 export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const gameLoopRef = useRef<number>();
+  const gameLoopRef = useRef<number | undefined>(undefined);
   
   // Game state refs
   const surferYRef = useRef<number>(0);
