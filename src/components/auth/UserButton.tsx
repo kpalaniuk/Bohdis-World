@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { LogOut, User, Settings } from 'lucide-react';
+import { LogOut, User, Settings, RefreshCw, Cloud } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function UserButton() {
-  const { user, isLoaded, isSignedIn, signOut, authMethod } = useAuth();
+  const { user, isLoaded, isSignedIn, signOut, authMethod, isSyncing } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -53,10 +53,17 @@ export function UserButton() {
 
   return (
     <div className="relative" ref={dropdownRef}>
+      {/* Sync indicator */}
+      {isSyncing && (
+        <div className="absolute -top-1 -right-1 z-10">
+          <RefreshCw size={14} className="text-foamy-green animate-spin" />
+        </div>
+      )}
+      
       {/* Avatar button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="
+        className={`
           w-10 h-10
           bg-ocean-blue
           border-4 border-pixel-black
@@ -65,7 +72,8 @@ export function UserButton() {
           hover:bg-[#5ba0e9]
           transition-colors
           cursor-pointer
-        "
+          ${isSyncing ? 'opacity-75' : ''}
+        `}
         style={{ 
           boxShadow: '3px 3px 0px #2d2d2d',
           imageRendering: 'pixelated',
@@ -95,14 +103,22 @@ export function UserButton() {
               @{user.username}
             </p>
             {/* Auth method badge */}
-            <span className={`
-              inline-block mt-1 px-2 py-0.5
-              font-lcd text-xs
-              border border-current
-              ${authMethod === 'simple' ? 'text-foamy-green' : 'text-ocean-blue'}
-            `}>
-              {authMethod === 'simple' ? 'QUICK' : 'EMAIL'}
-            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`
+                inline-block px-2 py-0.5
+                font-lcd text-xs
+                border border-current
+                ${authMethod === 'simple' ? 'text-foamy-green' : 'text-ocean-blue'}
+              `}>
+                {authMethod === 'simple' ? 'QUICK' : 'EMAIL'}
+              </span>
+              
+              {/* Cloud sync status */}
+              <span className="flex items-center gap-1 text-gray-500 text-xs">
+                <Cloud size={12} />
+                {isSyncing ? 'Syncing...' : 'Synced'}
+              </span>
+            </div>
           </div>
 
           {/* Menu items */}
