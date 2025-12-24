@@ -35,7 +35,7 @@ export function ProblemDisplay({ level, onOpenShop }: ProblemDisplayProps) {
   const [totalAttempts, setTotalAttempts] = useState(0);
   
   const inputRef = useRef<HTMLInputElement>(null);
-  const resultTimeoutRef = useRef<NodeJS.Timeout>();
+  const resultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const config = GRADE_CONFIG[level];
 
