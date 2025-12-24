@@ -26,7 +26,7 @@ const SURFER_SCALE = 2;
 
 export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const gameLoopRef = useRef<number>();
+  const gameLoopRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(0);
   
   // Game state refs (for animation loop)
