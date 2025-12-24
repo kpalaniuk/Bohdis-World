@@ -200,7 +200,7 @@ export default function GamePage() {
         {/* Shop Modal */}
         {showShop && (
           <div className="fixed inset-0 bg-pixel-black/80 flex items-center justify-center z-50 p-4">
-            <PixelCard variant="default" padding="lg" className="max-w-3xl w-full max-h-[80vh] overflow-y-auto">
+            <PixelCard variant="solid" padding="lg" className="max-w-3xl w-full max-h-[80vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="font-pixel text-foamy-green text-lg">SURF SHOP</h2>
                 <div className="flex items-center gap-4">

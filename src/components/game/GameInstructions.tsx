@@ -17,7 +17,7 @@ export function GameInstructions({ isOpen, onClose }: GameInstructionsProps) {
       onClick={onClose}
     >
       <PixelCard 
-        variant="default" 
+        variant="solid" 
         padding="lg" 
         className="max-w-3xl w-full max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
