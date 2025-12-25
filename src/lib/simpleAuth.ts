@@ -234,8 +234,10 @@ export async function getAllUsers(): Promise<AdminUserView[]> {
     return [];
   }
 
+  const db = supabase; // TypeScript knows db is non-null here
+
   try {
-    const { data: users, error } = await supabase
+    const { data: users, error } = await db
       .from('simple_users')
       .select(`
         id,
@@ -256,7 +258,7 @@ export async function getAllUsers(): Promise<AdminUserView[]> {
     // Fetch profiles and progress for each user
     const usersWithDetails: AdminUserView[] = await Promise.all(
       users.map(async (user) => {
-        const { data: profile } = await supabase
+        const { data: profile } = await db
           .from('user_profiles')
           .select('id, has_completed_gate')
           .eq('simple_user_id', user.id)
@@ -264,7 +266,7 @@ export async function getAllUsers(): Promise<AdminUserView[]> {
 
         let progress = null;
         if (profile) {
-          const { data: progressData } = await supabase
+          const { data: progressData } = await db
             .from('user_progress')
             .select('coins, total_earned, high_score, unlocked_themes, unlocked_powerups')
             .eq('user_id', profile.id)
