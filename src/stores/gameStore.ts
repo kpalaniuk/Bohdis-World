@@ -16,6 +16,9 @@ interface GameState {
   isPaused: boolean;
   isPlaying: boolean;
   
+  // Settings
+  soundEnabled: boolean;
+  
   // Power-ups & themes
   activePowerUps: PowerUp[];
   currentTheme: GameTheme;
@@ -33,6 +36,7 @@ interface GameState {
   setTheme: (theme: GameTheme) => void;
   resetGame: () => void;
   setGateCompleted: (completed: boolean) => void;
+  setSoundEnabled: (enabled: boolean) => void;
 }
 
 export const useGameStore = create<GameState>()(
@@ -45,6 +49,7 @@ export const useGameStore = create<GameState>()(
       highScore: 0,
       isPaused: false,
       isPlaying: false,
+      soundEnabled: true,
       activePowerUps: [],
       currentTheme: 'beach',
 
@@ -105,9 +110,11 @@ export const useGameStore = create<GameState>()(
       resetGame: () => {
         set({
           score: 0,
+          highScore: 0,
           isPaused: false,
           isPlaying: false,
           activePowerUps: [],
+          currentTheme: 'beach',
         });
       },
 
@@ -117,6 +124,10 @@ export const useGameStore = create<GameState>()(
           isUnlocked: completed,
         });
       },
+      
+      setSoundEnabled: (enabled: boolean) => {
+        set({ soundEnabled: enabled });
+      },
     }),
     {
       name: 'bohdi-game',
@@ -124,6 +135,7 @@ export const useGameStore = create<GameState>()(
         hasCompletedGateEver: state.hasCompletedGateEver,
         highScore: state.highScore,
         currentTheme: state.currentTheme,
+        soundEnabled: state.soundEnabled,
       }),
     }
   )

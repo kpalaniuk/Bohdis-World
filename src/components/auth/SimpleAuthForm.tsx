@@ -37,7 +37,8 @@ export function SimpleAuthForm({ mode, onModeChange }: SimpleAuthFormProps) {
         if (result.error) {
           setError(result.error);
         } else {
-          router.push('/');
+          // After signup, go to profile to complete setup
+          router.push('/profile');
         }
       }
     } catch {

@@ -44,6 +44,7 @@ interface UnlockState {
   getPowerUpCount: (powerUp: PowerUp) => number;
   setUnlockedThemes: (themes: GameTheme[]) => void;
   setOwnedPowerUps: (powerUps: Record<PowerUp, number>) => void;
+  resetUnlocks: () => void;
 }
 
 export const useUnlockStore = create<UnlockState>()(
@@ -112,6 +113,18 @@ export const useUnlockStore = create<UnlockState>()(
 
       setOwnedPowerUps: (powerUps: Record<PowerUp, number>) => {
         set({ ownedPowerUps: powerUps });
+      },
+      
+      resetUnlocks: () => {
+        set({
+          unlockedThemes: ['beach'],
+          unlockedPowerUps: [],
+          ownedPowerUps: {
+            'double-jump': 0,
+            'shield': 0,
+            'slow-mo': 0,
+          },
+        });
       },
     }),
     {

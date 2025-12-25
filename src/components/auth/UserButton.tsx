@@ -3,9 +3,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { LogOut, User, Settings, RefreshCw, Cloud } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function UserButton() {
+  const router = useRouter();
   const { user, isLoaded, isSignedIn, signOut, authMethod, isSyncing } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -50,6 +52,12 @@ export function UserButton() {
 
   const displayName = user.displayName || user.username || 'Player';
   const initials = displayName[0]?.toUpperCase() || 'P';
+
+  const handleSignOut = async () => {
+    await signOut();
+    setIsOpen(false);
+    router.push('/');
+  };
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -123,11 +131,9 @@ export function UserButton() {
 
           {/* Menu items */}
           <div className="py-1">
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                // Could open profile settings
-              }}
+            <Link
+              href="/profile"
+              onClick={() => setIsOpen(false)}
               className="
                 w-full px-4 py-2
                 flex items-center gap-3
@@ -139,13 +145,11 @@ export function UserButton() {
             >
               <User size={16} className="text-foamy-green" />
               Profile
-            </button>
+            </Link>
 
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                // Could open settings
-              }}
+            <Link
+              href="/settings"
+              onClick={() => setIsOpen(false)}
               className="
                 w-full px-4 py-2
                 flex items-center gap-3
@@ -157,13 +161,10 @@ export function UserButton() {
             >
               <Settings size={16} className="text-ocean-blue" />
               Settings
-            </button>
+            </Link>
 
             <button
-              onClick={() => {
-                signOut();
-                setIsOpen(false);
-              }}
+              onClick={handleSignOut}
               className="
                 w-full px-4 py-2
                 flex items-center gap-3

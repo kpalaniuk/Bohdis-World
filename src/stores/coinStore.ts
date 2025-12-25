@@ -9,6 +9,7 @@ interface CoinState {
   spendCoins: (amount: number) => boolean;
   setCoins: (coins: number, totalEarned?: number) => void;
   resetLastEarned: () => void;
+  resetCoins: () => void;
 }
 
 export const useCoinStore = create<CoinState>()(
@@ -45,6 +46,10 @@ export const useCoinStore = create<CoinState>()(
 
       resetLastEarned: () => {
         set({ lastEarned: 0 });
+      },
+      
+      resetCoins: () => {
+        set({ coins: 0, totalEarned: 0, lastEarned: 0 });
       },
     }),
     {

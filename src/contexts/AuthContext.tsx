@@ -4,11 +4,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useUser as useClerkUser, useClerk } from '@clerk/nextjs';
 import { 
   SimpleUser, 
+  UserRole,
   getSession, 
   saveSession, 
   clearSession,
   signInSimple,
-  signUpSimple
+  signUpSimple,
+  isAdmin as checkIsAdmin,
+  isSuperuser as checkIsSuperuser,
 } from '@/lib/simpleAuth';
 import { 
   loadUserProgress, 
@@ -26,6 +29,8 @@ interface AuthUser {
   username: string | null;
   displayName: string | null;
   authMethod: 'clerk' | 'simple';
+  role: UserRole;
+  canGiftItems: boolean;
 }
 
 interface AuthContextType {
@@ -34,6 +39,10 @@ interface AuthContextType {
   isSignedIn: boolean;
   authMethod: 'clerk' | 'simple' | null;
   isSyncing: boolean;
+  
+  // Role helpers
+  isAdmin: boolean;
+  isSuperuser: boolean;
   
   // Simple auth methods
   signInWithUsername: (username: string, password: string) => Promise<{ error: string | null }>;
@@ -80,6 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         username: clerkUser.username,
         displayName: clerkUser.firstName || clerkUser.username || null,
         authMethod: 'clerk' as const,
+        role: 'user' as UserRole, // Clerk users default to regular user
+        canGiftItems: false,
       };
     }
     if (simpleUser) {
@@ -88,6 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         username: simpleUser.username,
         displayName: simpleUser.display_name || simpleUser.username,
         authMethod: 'simple' as const,
+        role: simpleUser.role,
+        canGiftItems: simpleUser.can_gift_items,
       };
     }
     return null;
@@ -202,6 +215,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [clerkSignedIn, clerkSignOut, simpleUser]);
 
+  // Role helpers
+  const isAdmin = checkIsAdmin(simpleUser);
+  const isSuperuser = checkIsSuperuser(simpleUser);
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -209,6 +226,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isSignedIn,
       authMethod,
       isSyncing,
+      isAdmin,
+      isSuperuser,
       signInWithUsername,
       signUpWithUsername,
       signOut,

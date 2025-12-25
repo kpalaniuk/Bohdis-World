@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calculator, Brain, Menu, X, Gamepad2, LucideIcon } from 'lucide-react';
+import { Home, Calculator, Brain, Menu, X, Gamepad2, Shield, LucideIcon } from 'lucide-react';
 import { CoinDisplay } from './ui/CoinDisplay';
 import { UserButton } from './auth/UserButton';
 import { useGameStore } from '@/stores/gameStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavLink {
   href: string;
@@ -26,6 +27,13 @@ export function NavBar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { highScore } = useGameStore();
+  const { isAdmin } = useAuth();
+  
+  // Build nav links dynamically based on user role
+  const allNavLinks: NavLink[] = [
+    ...navLinks,
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin', icon: Shield }] : []),
+  ];
 
   return (
     <nav 
@@ -44,7 +52,7 @@ export function NavBar() {
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-2">
-            {navLinks.map(({ href, label, icon: Icon, disabled }) => {
+            {allNavLinks.map(({ href, label, icon: Icon, disabled }) => {
               const isActive = pathname === href;
               
               if (disabled) {
@@ -122,7 +130,7 @@ export function NavBar() {
       {isMobileMenuOpen && (
         <div className="md:hidden bg-pixel-black border-t-4 border-pixel-shadow">
           <div className="px-4 py-4 space-y-2">
-            {navLinks.map(({ href, label, icon: Icon, disabled }) => {
+            {allNavLinks.map(({ href, label, icon: Icon, disabled }) => {
               const isActive = pathname === href;
               
               if (disabled) {
