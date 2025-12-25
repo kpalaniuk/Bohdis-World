@@ -301,7 +301,7 @@ export default function AdminPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <PixelCard variant="default" padding="md">
+          <PixelCard variant="solid" padding="md">
             <div className="flex items-center gap-3">
               <Users className="text-ocean-blue" size={24} />
               <div>
@@ -311,7 +311,7 @@ export default function AdminPage() {
             </div>
           </PixelCard>
           
-          <PixelCard variant="default" padding="md">
+          <PixelCard variant="solid" padding="md">
             <div className="flex items-center gap-3">
               <Crown className="text-purple-400" size={24} />
               <div>
@@ -323,7 +323,7 @@ export default function AdminPage() {
             </div>
           </PixelCard>
           
-          <PixelCard variant="default" padding="md">
+          <PixelCard variant="solid" padding="md">
             <div className="flex items-center gap-3">
               <Shield className="text-yellow-400" size={24} />
               <div>
@@ -335,7 +335,7 @@ export default function AdminPage() {
             </div>
           </PixelCard>
           
-          <PixelCard variant="default" padding="md">
+          <PixelCard variant="solid" padding="md">
             <div className="flex items-center gap-3">
               <Coins className="text-foamy-green" size={24} />
               <div>
