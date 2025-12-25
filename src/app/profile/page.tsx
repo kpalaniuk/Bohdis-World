@@ -259,7 +259,7 @@ export default function ProfilePage() {
                 <Zap size={18} className="text-sunset-orange" />
                 <span className="font-lcd text-gray-400 text-sm">POWER-UPS</span>
               </div>
-              <div className="font-pixel text-xl text-sunset-orange">{ownedPowerUps.length}</div>
+              <div className="font-pixel text-xl text-sunset-orange">{Object.values(ownedPowerUps).reduce((sum, count) => sum + count, 0)}</div>
               <div className="font-lcd text-gray-500 text-xs">owned</div>
             </div>
           </div>
