@@ -11,7 +11,7 @@ interface GameWrapperProps {
 }
 
 export function GameWrapper({ children }: GameWrapperProps) {
-  const { isUnlocked, jumpCount, incrementJumpCount, unlockSite, hasCompletedGateEver } = useGameStore();
+  const { isUnlocked, jumpCount, incrementJumpCount, hasCompletedGateEver } = useGameStore();
   const [siteUnlocked, setSiteUnlocked] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
@@ -26,18 +26,14 @@ export function GameWrapper({ children }: GameWrapperProps) {
 
   const handleObstacleCleared = useCallback(() => {
     // This is called from RunnerGame when an obstacle is passed
+    // Only increment if gate is still active (not unlocked)
     if (!siteUnlocked && !isUnlocked) {
       incrementJumpCount();
     }
   }, [siteUnlocked, isUnlocked, incrementJumpCount]);
 
-  // Watch for gate completion
-  useEffect(() => {
-    if (jumpCount >= 3 && !siteUnlocked) {
-      unlockSite();
-      setSiteUnlocked(true);
-    }
-  }, [jumpCount, siteUnlocked, unlockSite]);
+  // GateOverlay now controls the unlock flow (including login screen)
+  // No automatic unlock here - let GateOverlay handle it via onUnlock callback
 
   const handleUnlock = useCallback(() => {
     setSiteUnlocked(true);
