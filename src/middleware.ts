@@ -9,6 +9,8 @@ const isClerkConfigured = !!(
 );
 
 // Define public routes that don't require authentication
+// Note: profile, settings, admin are included because they handle their own auth
+// via useAuth hook (supports both Clerk and simple auth)
 const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
@@ -16,6 +18,9 @@ const isPublicRoute = createRouteMatcher([
   '/calculator',
   '/math',
   '/game',
+  '/profile',
+  '/settings',
+  '/admin',
 ]);
 
 // Clerk middleware handler
