@@ -56,6 +56,7 @@ export function WordProblemCreator({ onClose }: WordProblemCreatorProps) {
       if (!user || !authMethod) return;
       try {
         const userId = createAuthUserId(authMethod, user.id);
+        if (!userId) return;
         const result = await loadUserProblems(userId);
         if (result.success && result.problems) {
           setSavedProblems(result.problems);
@@ -161,6 +162,7 @@ export function WordProblemCreator({ onClose }: WordProblemCreatorProps) {
     if (!user || !authMethod || !selectedTemplate || !wordProblem) return;
     
     const userId = createAuthUserId(authMethod, user.id);
+    if (!userId) return;
     const result = await saveUserProblem(
       userId,
       selectedTemplate.id,
@@ -185,6 +187,7 @@ export function WordProblemCreator({ onClose }: WordProblemCreatorProps) {
     if (!user || !authMethod || !selectedTemplate || !wordProblem) return;
     
     const userId = createAuthUserId(authMethod, user.id);
+    if (!userId) return;
     const result = await postToForum(
       userId,
       selectedTemplate.id,

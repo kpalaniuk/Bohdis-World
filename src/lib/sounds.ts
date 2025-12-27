@@ -16,12 +16,9 @@ class SoundManager {
         this.soundEnabled = useGameStore.getState().soundEnabled;
         
         // Subscribe to sound enabled changes
-        useGameStore.subscribe(
-          (state) => state.soundEnabled,
-          (enabled) => {
-            this.soundEnabled = enabled;
-          }
-        );
+        useGameStore.subscribe((state) => {
+          this.soundEnabled = state.soundEnabled;
+        });
       } catch (e) {
         // Store might not be initialized yet, default to enabled
         this.soundEnabled = true;

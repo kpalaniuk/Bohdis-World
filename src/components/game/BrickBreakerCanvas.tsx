@@ -170,14 +170,7 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
     }
   }, [user]);
 
-  // Initialize level
-  useEffect(() => {
-    bricksRef.current = generateLevel(currentLevel, gameSettings || undefined);
-    setPowerUps([]);
-    setCheatActive(false);
-    resetBall();
-  }, [currentLevel, resetBall, gameSettings]);
-  
+  // Reset ball function - must be declared before useEffect that uses it
   const resetBall = useCallback(() => {
     // Level-based speed: slower for level 1, progressively faster
     let baseSpeed = currentLevel === 1 ? 2.5 : currentLevel <= 3 ? 3 : currentLevel <= 5 ? 3.5 : currentLevel <= 7 ? 4 : currentLevel <= 9 ? 4.5 : 5;
@@ -196,6 +189,14 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
     };
     lastCollisionBrickRef.current = null;
   }, [currentLevel, gameSettings]);
+
+  // Initialize level
+  useEffect(() => {
+    bricksRef.current = generateLevel(currentLevel, gameSettings || undefined);
+    setPowerUps([]);
+    setCheatActive(false);
+    resetBall();
+  }, [currentLevel, resetBall, gameSettings]);
   
   const startGame = useCallback(async () => {
     resetBall();
