@@ -133,6 +133,8 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
   const [cheatActive, setCheatActive] = useState(false);
   const [cheatInput, setCheatInput] = useState('');
   const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [paddleSpeed, setPaddleSpeed] = useState(1.0); // Multiplier for paddle speed
   
   const paddleRef = useRef<Paddle>({
     x: CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2,
@@ -240,6 +242,25 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
     return () => window.removeEventListener('keypress', handleKeyPress);
   }, [gameState, soundEnabled]);
   
+  // Reset game function
+  const resetGame = useCallback(() => {
+    setCurrentLevel(1);
+    setScore(0);
+    const startingLives = gameSettings?.brickBreaker?.startingLives ? (gameSettings.brickBreaker.startingLives as number) : 3;
+    setLives(startingLives);
+    setCheatActive(false);
+    setPowerUps([]);
+    setGameState('ready');
+    bricksRef.current = generateLevel(1, gameSettings || undefined);
+    resetBall();
+    paddleRef.current = {
+      x: CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2,
+      y: CANVAS_HEIGHT - 40,
+      width: PADDLE_WIDTH,
+      height: PADDLE_HEIGHT,
+    };
+  }, [gameSettings, resetBall]);
+
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -248,8 +269,26 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
       if (e.code === 'Space' && gameState === 'ready') {
         startGame();
       } else if (e.code === 'KeyP' || e.code === 'Escape') {
-        if (gameState === 'playing') setGameState('paused');
-        else if (gameState === 'paused') setGameState('playing');
+        if (gameState === 'playing') {
+          setGameState('paused');
+          setShowSettings(false);
+        } else if (gameState === 'paused') {
+          setGameState('playing');
+        }
+      } else if (e.code === 'KeyR' && gameState === 'gameover') {
+        resetGame();
+      } else if (e.code === 'KeyS' && (gameState === 'playing' || gameState === 'paused')) {
+        if (showSettings) {
+          setShowSettings(false);
+          if (gameState === 'paused') {
+            setGameState('playing');
+          }
+        } else {
+          setShowSettings(true);
+          if (gameState === 'playing') {
+            setGameState('paused');
+          }
+        }
       }
     };
     
@@ -263,7 +302,7 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, startGame]);
+  }, [gameState, startGame, resetGame]);
   
   // Game loop
   useEffect(() => {
@@ -299,12 +338,13 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
       if (gameState === 'playing') {
         // Move paddle
         const paddle = paddleRef.current;
-        const paddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 7 * (gameSettings.brickBreaker.paddleSpeed as number) : 7;
+        const basePaddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 7 * (gameSettings.brickBreaker.paddleSpeed as number) : 7;
+        const adjustedPaddleSpeed = basePaddleSpeed * paddleSpeed;
         if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
-          paddle.x = Math.max(0, paddle.x - paddleSpeed);
+          paddle.x = Math.max(0, paddle.x - adjustedPaddleSpeed);
         }
         if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
-          paddle.x = Math.min(CANVAS_WIDTH - paddle.width, paddle.x + paddleSpeed);
+          paddle.x = Math.min(CANVAS_WIDTH - paddle.width, paddle.x + adjustedPaddleSpeed);
         }
         
         // Move ball
@@ -583,7 +623,7 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
       } else if (gameState === 'levelComplete') {
         drawOverlay(ctx, `LEVEL ${currentLevel} COMPLETE!`, currentLevel < 10 ? 'Next level...' : 'CONGRATULATIONS!');
       } else if (gameState === 'gameover') {
-        drawOverlay(ctx, 'GAME OVER', `Final Score: ${score}`);
+        drawOverlay(ctx, 'GAME OVER', `Final Score: ${score} - Press R to Restart`);
       }
       
       gameLoopRef.current = requestAnimationFrame(gameLoop);
@@ -596,19 +636,66 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-  }, [gameState, currentLevel, score, lives, cheatActive, soundEnabled, resetBall, addCoins, onGameOver]);
+  }, [gameState, currentLevel, score, lives, cheatActive, soundEnabled, resetBall, addCoins, onGameOver, paddleSpeed]);
+  
+  // Handle paddle speed adjustment in settings
+  useEffect(() => {
+    if (!showSettings || gameState !== 'paused') return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        setPaddleSpeed(prev => Math.max(0.5, prev - 0.1));
+      } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        setPaddleSpeed(prev => Math.min(2.0, prev + 0.1));
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showSettings, gameState]);
   
   return (
-    <canvas
-      ref={canvasRef}
-      width={CANVAS_WIDTH}
-      height={CANVAS_HEIGHT}
-      className="border-4 border-pixel-black cursor-pointer"
-      style={{ 
-        boxShadow: '8px 8px 0px #2d2d2d',
-        touchAction: 'none',
-      }}
-    />
+    <div className="relative inline-block">
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        className="border-4 border-pixel-black cursor-pointer"
+        style={{ 
+          boxShadow: '8px 8px 0px #2d2d2d',
+          touchAction: 'none',
+        }}
+      />
+      
+      {/* Settings Overlay */}
+      {showSettings && (gameState === 'paused' || gameState === 'playing') && (
+        <div 
+          className="absolute inset-0 bg-black/95 flex items-center justify-center"
+          style={{ fontFamily: '"Press Start 2P", monospace' }}
+        >
+          <div className="text-center space-y-6">
+            <h2 className="text-foamy-green text-xl mb-6">GAME SETTINGS</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="text-white text-sm mb-2">Paddle Speed: {(paddleSpeed * 100).toFixed(0)}%</p>
+                <div className="w-80 h-6 bg-pixel-black border-2 border-white mx-auto relative">
+                  <div 
+                    className="h-full bg-ocean-blue transition-all"
+                    style={{ width: `${(paddleSpeed - 0.5) / 1.5 * 100}%` }}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2 text-xs text-gray-300">
+                <p>Press LEFT/RIGHT or A/D to adjust</p>
+                <p>Press S to close settings</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

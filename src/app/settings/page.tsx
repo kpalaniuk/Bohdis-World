@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Volume2, VolumeX, Trash2, LogOut, AlertTriangle, Music, Gamepad2 } from 'lucide-react';
+import { ArrowLeft, Volume2, VolumeX, Trash2, LogOut, AlertTriangle, Music, Gamepad2, Key } from 'lucide-react';
 import { PixelCard } from '@/components/ui/PixelCard';
 import { PixelButton } from '@/components/ui/PixelButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
 import { useCoinStore } from '@/stores/coinStore';
 import { useUnlockStore } from '@/stores/unlockStore';
+import { changePassword } from '@/lib/simpleAuth';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -18,6 +19,13 @@ export default function SettingsPage() {
   const { resetUnlocks } = useUnlockStore();
   
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Redirect if not signed in
   useEffect(() => {
@@ -37,6 +45,48 @@ export default function SettingsPage() {
   const handleSignOut = async () => {
     await signOut();
     router.push('/');
+  };
+
+  const handleChangePassword = async () => {
+    if (!user?.id) return;
+    
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    
+    // Validation
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All fields are required');
+      return;
+    }
+    
+    if (newPassword.length < 4) {
+      setPasswordError('New password must be at least 4 characters');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+    
+    setIsChangingPassword(true);
+    
+    const result = await changePassword(user.id, currentPassword, newPassword);
+    
+    if (result.success) {
+      setPasswordSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setShowPasswordReset(false);
+        setPasswordSuccess(false);
+      }, 2000);
+    } else {
+      setPasswordError(result.error || 'Failed to change password');
+    }
+    
+    setIsChangingPassword(false);
   };
 
   if (!isLoaded) {
@@ -133,6 +183,104 @@ export default function SettingsPage() {
                 </div>
                 <span className="font-lcd text-gray-600 text-xs">COMING SOON</span>
               </button>
+            </div>
+          </div>
+
+          {/* Account Settings */}
+          <div>
+            <h2 
+              className="font-pixel text-ocean-blue text-sm mb-4 flex items-center gap-2"
+              style={{ textShadow: '2px 2px 0px #2d2d2d' }}
+            >
+              <Key size={16} />
+              ACCOUNT
+            </h2>
+            
+            <div className="space-y-3">
+              {/* Change Password */}
+              {!showPasswordReset ? (
+                <button
+                  onClick={() => setShowPasswordReset(true)}
+                  className="
+                    w-full p-4
+                    bg-pixel-shadow/50 border-4 border-pixel-shadow
+                    flex items-center gap-3
+                    hover:bg-pixel-shadow
+                    transition-colors
+                  "
+                  style={{ boxShadow: '3px 3px 0px #1a1a1a' }}
+                >
+                  <Key size={20} className="text-ocean-blue" />
+                  <span className="font-lcd text-white">Change Password</span>
+                </button>
+              ) : (
+                <div 
+                  className="p-4 bg-pixel-shadow/50 border-4 border-pixel-shadow space-y-3"
+                  style={{ boxShadow: '3px 3px 0px #1a1a1a' }}
+                >
+                  {passwordSuccess ? (
+                    <div className="p-3 bg-green-900/30 border-2 border-foamy-green">
+                      <p className="font-lcd text-foamy-green text-sm">Password changed successfully!</p>
+                    </div>
+                  ) : (
+                    <>
+                      {passwordError && (
+                        <div className="p-3 bg-red-900/30 border-2 border-red-500">
+                          <p className="font-lcd text-red-300 text-sm">{passwordError}</p>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <input
+                          type="password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          placeholder="Current Password"
+                          className="w-full px-3 py-2 bg-pixel-black border-2 border-pixel-shadow text-white font-lcd focus:border-ocean-blue outline-none"
+                        />
+                        <input
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="New Password"
+                          className="w-full px-3 py-2 bg-pixel-black border-2 border-pixel-shadow text-white font-lcd focus:border-ocean-blue outline-none"
+                        />
+                        <input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Confirm New Password"
+                          className="w-full px-3 py-2 bg-pixel-black border-2 border-pixel-shadow text-white font-lcd focus:border-ocean-blue outline-none"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <PixelButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setShowPasswordReset(false);
+                            setPasswordError(null);
+                            setCurrentPassword('');
+                            setNewPassword('');
+                            setConfirmPassword('');
+                          }}
+                          className="flex-1"
+                        >
+                          CANCEL
+                        </PixelButton>
+                        <PixelButton
+                          variant="primary"
+                          size="sm"
+                          onClick={handleChangePassword}
+                          disabled={isChangingPassword}
+                          className="flex-1"
+                        >
+                          {isChangingPassword ? '...' : 'CHANGE'}
+                        </PixelButton>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
