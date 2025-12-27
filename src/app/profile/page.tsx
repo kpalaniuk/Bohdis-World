@@ -281,7 +281,7 @@ export default function ProfilePage() {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* Coins */}
-          <PixelCard variant="default" padding="md">
+          <PixelCard variant="solid" padding="md">
             <div className="text-center">
               <Coins size={24} className="text-yellow-400 mx-auto mb-2" />
               <div className="font-pixel text-2xl text-foamy-green">{coins}</div>
@@ -291,7 +291,7 @@ export default function ProfilePage() {
           </PixelCard>
 
           {/* High Score */}
-          <PixelCard variant="default" padding="md">
+          <PixelCard variant="solid" padding="md">
             <div className="text-center">
               <Trophy size={24} className="text-ocean-blue mx-auto mb-2" />
               <div className="font-pixel text-2xl text-ocean-blue">{highScore}m</div>
@@ -300,7 +300,7 @@ export default function ProfilePage() {
           </PixelCard>
 
           {/* Math Accuracy */}
-          <PixelCard variant="default" padding="md">
+          <PixelCard variant="solid" padding="md">
             <div className="text-center">
               <Brain size={24} className="text-purple-400 mx-auto mb-2" />
               <div className="font-pixel text-2xl text-purple-400">{accuracyPercent}%</div>
@@ -310,7 +310,7 @@ export default function ProfilePage() {
           </PixelCard>
 
           {/* Current Streak */}
-          <PixelCard variant="default" padding="md">
+          <PixelCard variant="solid" padding="md">
             <div className="text-center">
               <Zap size={24} className="text-sunset-orange mx-auto mb-2" />
               <div className="font-pixel text-2xl text-sunset-orange">{mathStats.streak}</div>
