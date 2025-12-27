@@ -5,7 +5,7 @@ import { useCoinStore } from '@/stores/coinStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { playSound } from '@/lib/sounds';
-import { getGameSettingsForUser } from '@/lib/gameSettings';
+import { getGameSettingsForUser, GameSettingsConfig } from '@/lib/gameSettings';
 import confetti from 'canvas-confetti';
 
 interface Asteroid {
@@ -74,7 +74,7 @@ function generateAsteroidShape(size: number): { x: number; y: number }[] {
 }
 
 // Generate level asteroids
-function generateLevelAsteroids(level: number, settings?: Record<string, unknown>): Asteroid[] {
+function generateLevelAsteroids(level: number, settings?: GameSettingsConfig): Asteroid[] {
   const asteroids: Asteroid[] = [];
   // Level 1: 2 asteroids, progressively more (or custom count)
   const baseCount = level === 1 ? 2 : level <= 3 ? 3 : level <= 5 ? 4 : level <= 7 ? 5 : level <= 9 ? 6 : 8;
@@ -170,7 +170,7 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
   const { soundEnabled } = useGameStore();
   const { addCoins } = useCoinStore();
   const { user } = useAuth();
-  const [gameSettings, setGameSettings] = useState<Record<string, unknown> | null>(null);
+  const [gameSettings, setGameSettings] = useState<GameSettingsConfig | null>(null);
   
   // Initialize level
   useEffect(() => {

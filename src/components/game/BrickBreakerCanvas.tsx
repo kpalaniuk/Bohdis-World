@@ -6,7 +6,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { playSound } from '@/lib/sounds';
 import { logActivity } from '@/lib/activityTracking';
-import { getGameSettingsForUser } from '@/lib/gameSettings';
+import { getGameSettingsForUser, GameSettingsConfig } from '@/lib/gameSettings';
 import confetti from 'canvas-confetti';
 
 interface Brick {
@@ -71,7 +71,7 @@ const BRICK_COLORS = [
 ];
 
 // Level configurations
-function generateLevel(level: number, settings?: Record<string, unknown>): Brick[] {
+function generateLevel(level: number, settings?: GameSettingsConfig): Brick[] {
   const bricks: Brick[] = [];
   const colorsPerRow = Math.min(BRICK_COLORS.length, BRICK_ROWS);
   
@@ -156,7 +156,7 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
   const { soundEnabled } = useGameStore();
   const { addCoins } = useCoinStore();
   const { user } = useAuth();
-  const [gameSettings, setGameSettings] = useState<Record<string, unknown> | null>(null);
+  const [gameSettings, setGameSettings] = useState<GameSettingsConfig | null>(null);
   
   // Load game settings
   useEffect(() => {
