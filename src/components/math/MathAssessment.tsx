@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Trophy, Zap, Clock, Target, ChevronUp, ChevronDown } from 'lucide-react';
+import { Play, Clock, ChevronUp, ChevronDown, GraduationCap, Zap } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PixelButton } from '@/components/ui/PixelButton';
 import { PixelCard } from '@/components/ui/PixelCard';
@@ -11,47 +11,65 @@ import {
   AssessmentProblem,
   generateAssessmentProblem,
   checkAssessmentAnswer,
-  calculateSpeedBonus,
-  calculateGrade,
+  calculateGradeLevel,
   LEVEL_NAMES,
+  LEVEL_DESCRIPTIONS,
 } from './AssessmentProblemGenerator';
 import { AssessmentResults } from './AssessmentResults';
 
-const ASSESSMENT_DURATION = 60; // 60 seconds
+const INITIAL_TIME = 90; // Start with 90 seconds
+const TIME_BONUS_CORRECT = 2; // Add 2 seconds per correct answer (reduced from 5)
+const MAX_TIME = 120; // Cap at 2 minutes
+const STREAK_FOR_LEVEL_UP = 3; // Level up after 3 correct in a row (slower advancement)
 
 type GamePhase = 'setup' | 'playing' | 'results';
 
+interface LevelAnswer {
+  level: number;
+  correct: boolean;
+}
+
 export function MathAssessment() {
-  const { lastLevel, setLastLevel, addAssessmentResult, highScore, bestGrade } = useAssessmentStore();
+  const { 
+    lastLevel, 
+    setLastLevel, 
+    addAssessmentResult, 
+    bestGradeLevel,
+    currentStreak,
+    longestStreak,
+    totalAssessments,
+    totalQuestionsAnswered,
+    updateStreak,
+  } = useAssessmentStore();
   const { addCoins } = useCoinStore();
   
   const [phase, setPhase] = useState<GamePhase>('setup');
   const [startingLevel, setStartingLevel] = useState(lastLevel);
   const [currentLevel, setCurrentLevel] = useState(lastLevel);
   const [problem, setProblem] = useState<AssessmentProblem | null>(null);
-  const [userAnswer, setUserAnswer] = useState('');
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   
   // Timer
-  const [timeRemaining, setTimeRemaining] = useState(ASSESSMENT_DURATION);
+  const [timeRemaining, setTimeRemaining] = useState(INITIAL_TIME);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Stats
-  const [score, setScore] = useState(0);
   const [questionsAnswered, setQuestionsAnswered] = useState(0);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [streak, setStreak] = useState(0);
   const [totalResponseTime, setTotalResponseTime] = useState(0);
-  const [levelsReached, setLevelsReached] = useState<number[]>([]);
+  const [levelAnswers, setLevelAnswers] = useState<LevelAnswer[]>([]);
+  const [maxLevelReached, setMaxLevelReached] = useState(1);
   
   // Question timing
   const questionStartTime = useRef<number>(0);
   
   // Animation
-  const [showPointsPopup, setShowPointsPopup] = useState<number | null>(null);
+  const [showTimeBonus, setShowTimeBonus] = useState<number | null>(null);
   const [resultFeedback, setResultFeedback] = useState<'correct' | 'wrong' | null>(null);
   
-  const inputRef = useRef<HTMLInputElement>(null);
+  // Streak bonus for this session
+  const [sessionStreakBonus, setSessionStreakBonus] = useState(0);
 
   // Initialize starting level from store
   useEffect(() => {
@@ -63,33 +81,35 @@ export function MathAssessment() {
   const generateNewProblem = useCallback(() => {
     const newProblem = generateAssessmentProblem(currentLevel);
     setProblem(newProblem);
-    setUserAnswer('');
     setSelectedChoice(null);
     setResultFeedback(null);
     questionStartTime.current = Date.now();
     
-    // Track levels reached
-    if (!levelsReached.includes(currentLevel)) {
-      setLevelsReached(prev => [...prev, currentLevel]);
+    // Track max level
+    if (currentLevel > maxLevelReached) {
+      setMaxLevelReached(currentLevel);
     }
-  }, [currentLevel, levelsReached]);
+  }, [currentLevel, maxLevelReached]);
 
   // Start the assessment
   const startAssessment = () => {
+    // Update streak and get bonus
+    const { streakBonus } = updateStreak();
+    setSessionStreakBonus(streakBonus);
+    
     setPhase('playing');
     setCurrentLevel(startingLevel);
-    setScore(0);
     setQuestionsAnswered(0);
     setCorrectAnswers(0);
     setStreak(0);
     setTotalResponseTime(0);
-    setLevelsReached([startingLevel]);
-    setTimeRemaining(ASSESSMENT_DURATION);
+    setLevelAnswers([]);
+    setMaxLevelReached(startingLevel);
+    setTimeRemaining(INITIAL_TIME);
     
     // Generate first problem
     const firstProblem = generateAssessmentProblem(startingLevel);
     setProblem(firstProblem);
-    setUserAnswer('');
     setSelectedChoice(null);
     questionStartTime.current = Date.now();
     
@@ -112,21 +132,14 @@ export function MathAssessment() {
       timerRef.current = null;
     }
     
-    // Calculate average level
-    const avgLevel = levelsReached.length > 0 
-      ? levelsReached.reduce((a, b) => a + b, 0) / levelsReached.length 
-      : startingLevel;
+    // Calculate grade level from performance
+    const gradeLevel = calculateGradeLevel(levelAnswers);
     
-    // Calculate grade
-    const grade = calculateGrade(
-      score,
-      questionsAnswered,
-      correctAnswers,
-      avgLevel
-    );
-    
-    // Calculate coins earned (1 coin per 10 points)
-    const coinsEarned = Math.floor(score / 10);
+    // Calculate coins earned with enhanced formula
+    const levelBonus = Math.floor(gradeLevel);
+    const accuracy = questionsAnswered > 0 ? correctAnswers / questionsAnswered : 0;
+    const accuracyBonus = accuracy >= 0.8 ? 5 : 0;
+    const coinsEarned = correctAnswers + levelBonus + accuracyBonus + sessionStreakBonus;
     if (coinsEarned > 0) {
       addCoins(coinsEarned);
     }
@@ -134,16 +147,15 @@ export function MathAssessment() {
     // Save result
     addAssessmentResult({
       date: new Date().toISOString(),
-      score,
-      grade,
-      level: Math.max(...levelsReached, startingLevel),
+      gradeLevel,
       questionsAnswered,
       correctAnswers,
+      maxLevel: maxLevelReached,
       averageResponseTime: questionsAnswered > 0 ? totalResponseTime / questionsAnswered : 0,
     });
     
-    // Celebration for good grades
-    if (grade >= 80) {
+    // Celebration for good performance
+    if (gradeLevel >= 5) {
       confetti({
         particleCount: 150,
         spread: 100,
@@ -153,43 +165,44 @@ export function MathAssessment() {
     }
     
     setPhase('results');
-  }, [score, questionsAnswered, correctAnswers, levelsReached, startingLevel, totalResponseTime, addAssessmentResult, addCoins]);
+  }, [levelAnswers, correctAnswers, questionsAnswered, totalResponseTime, maxLevelReached, sessionStreakBonus, addAssessmentResult, addCoins]);
 
-  // Handle answer submission
-  const handleSubmit = useCallback(() => {
-    if (!problem) return;
+  // Handle choice selection
+  const handleChoiceSelect = useCallback((index: number) => {
+    if (resultFeedback !== null || !problem) return;
+    
+    setSelectedChoice(index);
     
     const responseTime = Date.now() - questionStartTime.current;
-    const answer = problem.isMultipleChoice ? selectedChoice : userAnswer;
+    const isCorrect = checkAssessmentAnswer(problem, index);
     
-    if (answer === null || answer === '') return;
-    
-    const isCorrect = checkAssessmentAnswer(problem, answer);
     setQuestionsAnswered(prev => prev + 1);
     setTotalResponseTime(prev => prev + responseTime);
+    setLevelAnswers(prev => [...prev, { level: currentLevel, correct: isCorrect }]);
     
     if (isCorrect) {
       setCorrectAnswers(prev => prev + 1);
       setStreak(prev => prev + 1);
       setResultFeedback('correct');
       
-      // Calculate points
-      const speedMultiplier = calculateSpeedBonus(responseTime);
-      const streakBonus = Math.min(streak, 5) * 5; // Max 25 bonus points for streak
-      const pointsEarned = Math.round(problem.basePoints * speedMultiplier + streakBonus);
+      // Add time bonus
+      const newTime = Math.min(MAX_TIME, timeRemaining + TIME_BONUS_CORRECT);
+      setTimeRemaining(newTime);
+      setShowTimeBonus(TIME_BONUS_CORRECT);
       
-      setScore(prev => prev + pointsEarned);
-      setShowPointsPopup(pointsEarned);
-      
-      // Level up after 3 correct in a row (max level 10)
-      if ((streak + 1) % 3 === 0 && currentLevel < 10) {
-        setCurrentLevel(prev => Math.min(10, prev + 1));
+      // Level up after streak (faster advancement when doing well)
+      const newStreak = streak + 1;
+      if (newStreak >= STREAK_FOR_LEVEL_UP && currentLevel < 10) {
+        // Jump levels faster when on a streak
+        const levelsToJump = newStreak >= 4 ? 2 : 1;
+        setCurrentLevel(prev => Math.min(10, prev + levelsToJump));
+        setStreak(0); // Reset streak after level up
       }
       
       // Quick confetti for streaks
-      if (streak >= 2) {
+      if (newStreak >= 2) {
         confetti({
-          particleCount: 20 + streak * 5,
+          particleCount: 20 + newStreak * 5,
           spread: 40,
           origin: { y: 0.7 },
           colors: ['#98D8AA', '#FFD700'],
@@ -198,14 +211,14 @@ export function MathAssessment() {
       
       // Auto-advance after short delay
       setTimeout(() => {
-        setShowPointsPopup(null);
+        setShowTimeBonus(null);
         generateNewProblem();
-      }, 400);
+      }, 500);
     } else {
       setStreak(0);
       setResultFeedback('wrong');
       
-      // Level down after wrong answer if above starting level
+      // Level down after wrong answer (but not below 1)
       if (currentLevel > 1) {
         setCurrentLevel(prev => Math.max(1, prev - 1));
       }
@@ -213,81 +226,9 @@ export function MathAssessment() {
       // Move to next question after showing feedback
       setTimeout(() => {
         generateNewProblem();
-      }, 800);
+      }, 1000);
     }
-  }, [problem, selectedChoice, userAnswer, streak, currentLevel, generateNewProblem]);
-
-  // Handle keyboard submit
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !problem?.isMultipleChoice) {
-      handleSubmit();
-    }
-  };
-
-  // Handle choice selection for multiple choice
-  const handleChoiceSelect = (index: number) => {
-    setSelectedChoice(index);
-    // Auto-submit on choice selection
-    setTimeout(() => {
-      const answer = index;
-      if (!problem) return;
-      
-      const responseTime = Date.now() - questionStartTime.current;
-      const isCorrect = checkAssessmentAnswer(problem, answer);
-      
-      setQuestionsAnswered(prev => prev + 1);
-      setTotalResponseTime(prev => prev + responseTime);
-      
-      if (isCorrect) {
-        setCorrectAnswers(prev => prev + 1);
-        setStreak(prev => prev + 1);
-        setResultFeedback('correct');
-        
-        const speedMultiplier = calculateSpeedBonus(responseTime);
-        const streakBonus = Math.min(streak, 5) * 5;
-        const pointsEarned = Math.round(problem.basePoints * speedMultiplier + streakBonus);
-        
-        setScore(prev => prev + pointsEarned);
-        setShowPointsPopup(pointsEarned);
-        
-        if ((streak + 1) % 3 === 0 && currentLevel < 10) {
-          setCurrentLevel(prev => Math.min(10, prev + 1));
-        }
-        
-        if (streak >= 2) {
-          confetti({
-            particleCount: 20 + streak * 5,
-            spread: 40,
-            origin: { y: 0.7 },
-            colors: ['#98D8AA', '#FFD700'],
-          });
-        }
-        
-        setTimeout(() => {
-          setShowPointsPopup(null);
-          generateNewProblem();
-        }, 400);
-      } else {
-        setStreak(0);
-        setResultFeedback('wrong');
-        
-        if (currentLevel > 1) {
-          setCurrentLevel(prev => Math.max(1, prev - 1));
-        }
-        
-        setTimeout(() => {
-          generateNewProblem();
-        }, 800);
-      }
-    }, 100);
-  };
-
-  // Focus input when problem changes
-  useEffect(() => {
-    if (problem && !problem.isMultipleChoice && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [problem]);
+  }, [problem, resultFeedback, streak, currentLevel, timeRemaining, generateNewProblem]);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -315,26 +256,51 @@ export function MathAssessment() {
             className="font-pixel text-foamy-green text-lg md:text-xl mb-2"
             style={{ textShadow: '2px 2px 0px #2d2d2d' }}
           >
-            ⏱️ TIMED ASSESSMENT
+            📐 MATH LEVEL ASSESSMENT
           </h2>
           <p className="font-lcd text-gray-400 text-lg">
-            60 seconds • Progressive Difficulty • Beat your best!
+            Find your math grade level • Adaptive difficulty
           </p>
         </div>
 
         {/* Stats display */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <PixelCard variant="glass" padding="md" className="text-center">
-            <Trophy className="w-6 h-6 mx-auto mb-2 text-foamy-green" />
-            <p className="font-lcd text-gray-400 text-sm">High Score</p>
-            <p className="font-pixel text-foamy-green text-lg">{highScore}</p>
+            <GraduationCap className="w-6 h-6 mx-auto mb-1 text-foamy-green" />
+            <p className="font-lcd text-gray-400 text-xs">Best Level</p>
+            <p className="font-pixel text-foamy-green text-xl">{bestGradeLevel.toFixed(1)}</p>
+            <p className="font-lcd text-gray-500 text-xs">
+              {LEVEL_NAMES[Math.floor(bestGradeLevel)]}
+            </p>
           </PixelCard>
+          
           <PixelCard variant="glass" padding="md" className="text-center">
-            <Target className="w-6 h-6 mx-auto mb-2 text-ocean-blue" />
-            <p className="font-lcd text-gray-400 text-sm">Best Grade</p>
-            <p className="font-pixel text-ocean-blue text-lg">{bestGrade.toFixed(2)}</p>
+            <span className="text-xl">🔥</span>
+            <p className="font-lcd text-gray-400 text-xs">Daily Streak</p>
+            <p className="font-pixel text-sunset-orange text-xl">{currentStreak} days</p>
+            <p className="font-lcd text-gray-500 text-xs">
+              Best: {longestStreak} days
+            </p>
           </PixelCard>
         </div>
+        
+        {/* Total stats */}
+        <PixelCard variant="glass" padding="sm">
+          <div className="flex justify-around text-center">
+            <div>
+              <p className="font-lcd text-gray-400 text-xs">Assessments</p>
+              <p className="font-pixel text-ocean-blue text-lg">{totalAssessments}</p>
+            </div>
+            <div>
+              <p className="font-lcd text-gray-400 text-xs">Questions</p>
+              <p className="font-pixel text-ocean-blue text-lg">{totalQuestionsAnswered}</p>
+            </div>
+            <div>
+              <p className="font-lcd text-gray-400 text-xs">Streak Bonus</p>
+              <p className="font-pixel text-foamy-green text-lg">+{Math.min(currentStreak * 2, 20)}🪙</p>
+            </div>
+          </div>
+        </PixelCard>
 
         {/* Starting level selector */}
         <PixelCard variant="glass" padding="lg">
@@ -366,6 +332,9 @@ export function MathAssessment() {
               <div className="font-lcd text-gray-400 text-lg">
                 {LEVEL_NAMES[startingLevel]}
               </div>
+              <div className="font-lcd text-gray-500 text-sm">
+                {LEVEL_DESCRIPTIONS[startingLevel]}
+              </div>
             </div>
             
             <button
@@ -383,8 +352,31 @@ export function MathAssessment() {
           </div>
           
           <p className="font-lcd text-gray-500 text-center text-sm mt-4">
-            Higher levels = harder questions + more points
+            The assessment adapts to find your true level!
           </p>
+        </PixelCard>
+
+        {/* How it works */}
+        <PixelCard variant="glass" padding="md">
+          <h3 className="font-pixel text-ocean-blue text-xs mb-3">HOW IT WORKS</h3>
+          <div className="font-lcd text-gray-400 text-sm space-y-2">
+            <p>⏱️ Start with 90 seconds</p>
+            <p>✅ Correct answers add +2 seconds</p>
+            <p>📈 Get 3+ right in a row to level up</p>
+            <p>📉 Wrong answers drop you down a level</p>
+          </div>
+        </PixelCard>
+        
+        {/* Earning coins */}
+        <PixelCard variant="glass" padding="md">
+          <h3 className="font-pixel text-foamy-green text-xs mb-3">🪙 EARN COINS</h3>
+          <div className="font-lcd text-gray-400 text-sm space-y-2">
+            <p>• 1 coin per correct answer</p>
+            <p>• Bonus coins for higher levels reached</p>
+            <p>• +5 bonus for 80%+ accuracy</p>
+            <p>• Daily streak bonus (up to +20 coins!)</p>
+            <p className="text-foamy-green">Play daily to build your streak! 🔥</p>
+          </div>
         </PixelCard>
 
         {/* Level preview */}
@@ -406,9 +398,9 @@ export function MathAssessment() {
             ))}
           </div>
           <div className="flex justify-between font-lcd text-xs text-gray-500 mt-2">
-            <span>Easy</span>
-            <span>→ Free Input → Multiple Choice →</span>
-            <span>Hard</span>
+            <span>1st Grade</span>
+            <span>→ All Multiple Choice →</span>
+            <span>10th+</span>
           </div>
         </PixelCard>
 
@@ -429,22 +421,23 @@ export function MathAssessment() {
 
   // Render results phase
   if (phase === 'results') {
-    const avgLevel = levelsReached.length > 0 
-      ? levelsReached.reduce((a, b) => a + b, 0) / levelsReached.length 
-      : startingLevel;
-    const grade = calculateGrade(score, questionsAnswered, correctAnswers, avgLevel);
-    const coinsEarned = Math.floor(score / 10);
+    const gradeLevel = calculateGradeLevel(levelAnswers);
+    const levelBonus = Math.floor(gradeLevel);
+    // Enhanced coin calculation: base + level bonus + accuracy bonus + streak bonus
+    const accuracyBonus = questionsAnswered > 0 && correctAnswers / questionsAnswered >= 0.8 ? 5 : 0;
+    const coinsEarned = correctAnswers + levelBonus + accuracyBonus + sessionStreakBonus;
     
     return (
       <AssessmentResults
-        score={score}
-        grade={grade}
+        gradeLevel={gradeLevel}
         questionsAnswered={questionsAnswered}
         correctAnswers={correctAnswers}
-        maxLevel={Math.max(...levelsReached, startingLevel)}
+        maxLevel={maxLevelReached}
         averageResponseTime={questionsAnswered > 0 ? totalResponseTime / questionsAnswered : 0}
         coinsEarned={coinsEarned}
-        isNewHighScore={score > highScore - (score > 0 ? score : 1)} // Check if this is a new high
+        streakBonus={sessionStreakBonus}
+        currentStreak={currentStreak}
+        isNewBest={gradeLevel > bestGradeLevel}
         onPlayAgain={() => {
           setPhase('setup');
           setStartingLevel(lastLevel);
@@ -461,7 +454,7 @@ export function MathAssessment() {
         {/* Timer */}
         <div 
           className={`
-            flex items-center gap-2 px-4 py-2 border-4 border-pixel-black
+            flex items-center gap-2 px-4 py-2 border-4 border-pixel-black relative
             ${timeRemaining <= 10 ? 'bg-sunset-orange/20 border-sunset-orange animate-pulse' : 'bg-pixel-shadow'}
           `}
           style={{ boxShadow: '3px 3px 0px #1a1a1a' }}
@@ -472,6 +465,13 @@ export function MathAssessment() {
           >
             {timeRemaining}s
           </span>
+          
+          {/* Time bonus popup */}
+          {showTimeBonus && (
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 plus-coins">
+              <span className="font-pixel text-foamy-green text-sm">+{showTimeBonus}s</span>
+            </div>
+          )}
         </div>
 
         {/* Level indicator */}
@@ -479,24 +479,17 @@ export function MathAssessment() {
           className="px-4 py-2 border-4 border-pixel-black bg-pixel-shadow"
           style={{ boxShadow: '3px 3px 0px #1a1a1a' }}
         >
-          <span className="font-lcd text-gray-400 text-sm">LVL </span>
+          <span className="font-lcd text-gray-400 text-sm">Grade </span>
           <span className="font-pixel text-foamy-green text-lg">{currentLevel}</span>
         </div>
 
-        {/* Score */}
+        {/* Correct count */}
         <div 
-          className="px-4 py-2 border-4 border-pixel-black bg-pixel-shadow relative"
+          className="px-4 py-2 border-4 border-pixel-black bg-pixel-shadow"
           style={{ boxShadow: '3px 3px 0px #1a1a1a' }}
         >
           <Zap className="w-4 h-4 text-foamy-green inline mr-1" />
-          <span className="font-pixel text-foamy-green text-lg">{score}</span>
-          
-          {/* Points popup */}
-          {showPointsPopup && (
-            <div className="absolute -top-8 left-1/2 -translate-x-1/2 plus-coins">
-              <span className="font-pixel text-foamy-green text-sm">+{showPointsPopup}</span>
-            </div>
-          )}
+          <span className="font-pixel text-foamy-green text-lg">{correctAnswers}</span>
         </div>
 
         {/* Streak */}
@@ -523,10 +516,15 @@ export function MathAssessment() {
           style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
         >
           {/* Problem type badge */}
-          <div 
-            className="inline-block px-3 py-1 mb-4 font-pixel text-xs border-2 border-pixel-black bg-ocean-blue text-pixel-black"
-          >
-            {problem.type.toUpperCase()}
+          <div className="flex items-center justify-between mb-4">
+            <div 
+              className="inline-block px-3 py-1 font-pixel text-xs border-2 border-pixel-black bg-ocean-blue text-pixel-black"
+            >
+              {problem.type.toUpperCase().replace(/-/g, ' ')}
+            </div>
+            <div className="font-lcd text-gray-500 text-sm">
+              {LEVEL_NAMES[currentLevel]}
+            </div>
           </div>
 
           {/* Question */}
@@ -539,89 +537,62 @@ export function MathAssessment() {
             </p>
           </div>
 
-          {/* Answer section */}
-          {problem.isMultipleChoice && problem.choices ? (
-            // Multiple choice
-            <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
-              {problem.choices.map((choice, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleChoiceSelect(index)}
-                  disabled={resultFeedback !== null}
-                  className={`
-                    p-4 font-lcd text-xl text-center
-                    border-4 border-pixel-black
-                    transition-all
-                    ${selectedChoice === index 
-                      ? resultFeedback === 'correct' 
-                        ? 'bg-foamy-green text-pixel-black' 
-                        : resultFeedback === 'wrong'
-                          ? 'bg-sunset-orange text-white'
-                          : 'bg-ocean-blue text-white'
-                      : 'bg-pixel-shadow text-white hover:bg-pixel-black'
-                    }
-                    ${resultFeedback === 'correct' && index === problem.correctChoiceIndex 
-                      ? 'bg-foamy-green text-pixel-black' 
-                      : ''
-                    }
-                    disabled:cursor-not-allowed
-                  `}
-                  style={{ 
-                    boxShadow: selectedChoice === index 
-                      ? 'inset 2px 2px 0px rgba(0,0,0,0.3)' 
-                      : '3px 3px 0px #1a1a1a' 
-                  }}
-                >
-                  {choice}
-                </button>
-              ))}
-            </div>
-          ) : (
-            // Free input
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <input
-                ref={inputRef}
-                type="text"
-                inputMode="decimal"
-                value={userAnswer}
-                onChange={(e) => setUserAnswer(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="?"
+          {/* Multiple choice answers */}
+          <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
+            {problem.choices.map((choice, index) => (
+              <button
+                key={index}
+                onClick={() => handleChoiceSelect(index)}
                 disabled={resultFeedback !== null}
                 className={`
-                  w-full sm:w-48
-                  px-4 py-3
-                  font-lcd text-3xl text-center
-                  bg-pixel-black border-4 border-pixel-shadow
-                  text-white
-                  focus:border-foamy-green focus:outline-none
-                  disabled:opacity-50
-                  ${resultFeedback === 'correct' ? 'border-foamy-green bg-foamy-green/10' : ''}
-                  ${resultFeedback === 'wrong' ? 'border-sunset-orange bg-sunset-orange/10' : ''}
+                  p-4 font-lcd text-xl text-center
+                  border-4 border-pixel-black
+                  transition-all
+                  ${selectedChoice === index 
+                    ? resultFeedback === 'correct' 
+                      ? 'bg-foamy-green text-pixel-black' 
+                      : resultFeedback === 'wrong'
+                        ? 'bg-sunset-orange text-white'
+                        : 'bg-ocean-blue text-white'
+                    : 'bg-pixel-shadow text-white hover:bg-pixel-black'
+                  }
+                  ${resultFeedback === 'correct' && index === problem.correctChoiceIndex 
+                    ? 'bg-foamy-green text-pixel-black' 
+                    : ''
+                  }
+                  ${resultFeedback === 'wrong' && index === problem.correctChoiceIndex
+                    ? 'bg-foamy-green/50 text-white border-foamy-green'
+                    : ''
+                  }
+                  disabled:cursor-not-allowed
                 `}
-                autoComplete="off"
-              />
-              
-              <PixelButton
-                onClick={handleSubmit}
-                variant="primary"
-                size="lg"
-                disabled={!userAnswer.trim() || resultFeedback !== null}
+                style={{ 
+                  boxShadow: selectedChoice === index 
+                    ? 'inset 2px 2px 0px rgba(0,0,0,0.3)' 
+                    : '3px 3px 0px #1a1a1a' 
+                }}
               >
-                ⏎
-              </PixelButton>
-            </div>
-          )}
+                {choice}
+              </button>
+            ))}
+          </div>
 
           {/* Quick feedback */}
           {resultFeedback === 'correct' && (
             <div className="text-center mt-4 slide-up">
-              <span className="font-pixel text-foamy-green">✓ CORRECT!</span>
+              <span className="font-pixel text-foamy-green">✓ CORRECT! +2s</span>
             </div>
           )}
           {resultFeedback === 'wrong' && (
             <div className="text-center mt-4 slide-up">
-              <span className="font-pixel text-sunset-orange">✗ {problem.displayAnswer}</span>
+              <span className="font-pixel text-sunset-orange">
+                ✗ Answer: {problem.displayAnswer}
+              </span>
+              {problem.hint && (
+                <p className="font-lcd text-gray-400 text-sm mt-1">
+                  💡 {problem.hint}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -642,4 +613,3 @@ export function MathAssessment() {
 }
 
 export default MathAssessment;
-

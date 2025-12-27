@@ -53,8 +53,10 @@ export function GameWrapper({ children }: GameWrapperProps) {
 
   return (
     <>
-      {/* Background Game - always running */}
-      <RunnerGame onObstacleCleared={handleObstacleCleared} />
+      {/* Background Game - always running (silent) */}
+      <div className="pointer-events-none">
+        <RunnerGame onObstacleCleared={handleObstacleCleared} disableSounds={true} />
+      </div>
 
       {/* Gate Overlay - shown until unlocked */}
       {!showContent && <GateOverlay onUnlock={handleUnlock} />}

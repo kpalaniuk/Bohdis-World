@@ -2,16 +2,15 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 
 interface SimpleAuthFormProps {
   mode: 'signin' | 'signup';
   onModeChange?: (mode: 'signin' | 'signup') => void;
+  onSuccess?: () => void;
 }
 
-export function SimpleAuthForm({ mode, onModeChange }: SimpleAuthFormProps) {
+export function SimpleAuthForm({ mode, onModeChange, onSuccess }: SimpleAuthFormProps) {
   const { signInWithUsername, signUpWithUsername } = useAuth();
-  const router = useRouter();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -30,15 +29,14 @@ export function SimpleAuthForm({ mode, onModeChange }: SimpleAuthFormProps) {
         if (result.error) {
           setError(result.error);
         } else {
-          router.push('/');
+          onSuccess?.();
         }
       } else {
         const result = await signUpWithUsername(username, password, displayName || undefined);
         if (result.error) {
           setError(result.error);
         } else {
-          // After signup, go to profile to complete setup
-          router.push('/profile');
+          onSuccess?.();
         }
       }
     } catch {
@@ -148,7 +146,7 @@ export function SimpleAuthForm({ mode, onModeChange }: SimpleAuthFormProps) {
         {isLoading ? (
           <span className="animate-pulse">LOADING...</span>
         ) : (
-          mode === 'signin' ? 'START GAME' : 'CREATE CHARACTER'
+          mode === 'signin' ? 'START PLAYING' : 'CREATE ACCOUNT'
         )}
       </button>
 
@@ -169,4 +167,3 @@ export function SimpleAuthForm({ mode, onModeChange }: SimpleAuthFormProps) {
     </form>
   );
 }
-

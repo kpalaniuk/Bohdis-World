@@ -4,14 +4,17 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { useGameStore, GameTheme, PowerUp } from '@/stores/gameStore';
 import { useUnlockStore } from '@/stores/unlockStore';
 import { useCoinStore } from '@/stores/coinStore';
-import { drawSurfer, SURFER_WIDTH, SURFER_HEIGHT } from './sprites/Surfer';
+import { useCharacterStore, CharacterType } from '@/stores/characterStore';
+import { drawCharacter, CHARACTER_WIDTH, CHARACTER_HEIGHT } from './sprites/CharacterSprites';
 import { drawObstacle, OBSTACLE_DIMENSIONS } from './sprites/Obstacles';
 import { drawBackground, drawGround } from './sprites/Background';
+import { playSound } from '@/lib/sounds';
 
 interface Obstacle {
   x: number;
   type: 'rock' | 'seaweed' | 'crab';
   passed: boolean;
+  height: number; // Height multiplier for taller obstacles
 }
 
 interface GameCanvasProps {
@@ -25,9 +28,9 @@ const DOUBLE_JUMP_FORCE = -13;
 const GAME_SPEED_INITIAL = 6;
 const GAME_SPEED_MAX = 14;
 const GROUND_Y_OFFSET = 100;
-const SURFER_SCALE = 2.5;
-const OBSTACLE_INTERVAL_MIN = 80;
-const OBSTACLE_INTERVAL_MAX = 150;
+const CHARACTER_SCALE = 2.5;
+const OBSTACLE_INTERVAL_MIN = 60;
+const OBSTACLE_INTERVAL_MAX = 120;
 
 export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -52,9 +55,14 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
   const [lives, setLives] = useState(3);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
 
-  const { currentTheme, activePowerUps, deactivatePowerUp } = useGameStore();
+  const { currentTheme, activePowerUps, deactivatePowerUp, soundEnabled } = useGameStore();
   const { usePowerUp, getPowerUpCount } = useUnlockStore();
   const { addCoins } = useCoinStore();
+  const { selectedCharacter, getStrengths } = useCharacterStore();
+  
+  // Get character info
+  const characterType: CharacterType = selectedCharacter || 'surfer';
+  const strengths = getStrengths();
 
   // Handle resize
   useEffect(() => {
@@ -75,13 +83,13 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
   // Initialize ground position
   useEffect(() => {
     if (dimensions.height > 0) {
-      surferYRef.current = dimensions.height - GROUND_Y_OFFSET - SURFER_HEIGHT * SURFER_SCALE;
+      surferYRef.current = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
     }
   }, [dimensions.height]);
 
   // Reset game
   const resetGame = useCallback(() => {
-    surferYRef.current = dimensions.height - GROUND_Y_OFFSET - SURFER_HEIGHT * SURFER_SCALE;
+    surferYRef.current = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
     velocityYRef.current = 0;
     isJumpingRef.current = false;
     hasDoubleJumpedRef.current = false;
@@ -135,19 +143,26 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
     
     if (gameState !== 'playing') return;
 
-    const groundY = dimensions.height - GROUND_Y_OFFSET - SURFER_HEIGHT * SURFER_SCALE;
+    const groundY = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
     const isOnGround = surferYRef.current >= groundY - 5;
     const hasDoubleJump = activePowerUps.includes('double-jump');
 
+    // Apply character jump strength modifier
+    const jumpMultiplier = strengths?.jumpHeight || 1;
+    const adjustedJumpForce = JUMP_FORCE * jumpMultiplier;
+    const adjustedDoubleJumpForce = DOUBLE_JUMP_FORCE * (strengths?.doubleJump || 1);
+
     if (isOnGround) {
-      velocityYRef.current = JUMP_FORCE;
+      velocityYRef.current = adjustedJumpForce;
       isJumpingRef.current = true;
       hasDoubleJumpedRef.current = false;
+      if (soundEnabled) playSound('jump');
     } else if (hasDoubleJump && !hasDoubleJumpedRef.current) {
-      velocityYRef.current = DOUBLE_JUMP_FORCE;
+      velocityYRef.current = adjustedDoubleJumpForce;
       hasDoubleJumpedRef.current = true;
+      if (soundEnabled) playSound('doubleJump');
     }
-  }, [gameState, dimensions.height, activePowerUps, startGame]);
+  }, [gameState, dimensions.height, activePowerUps, startGame, strengths, soundEnabled]);
 
   // Keyboard controls
   useEffect(() => {
@@ -180,26 +195,60 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
     }
   }, [handleJump]);
 
-  // Spawn obstacle
+  // Spawn obstacle with varied heights and timing
   const spawnObstacle = useCallback(() => {
     const types: ('rock' | 'seaweed' | 'crab')[] = ['rock', 'seaweed', 'crab'];
     const type = types[Math.floor(Math.random() * types.length)];
+    
+    // Determine obstacle height based on score segments
+    // Early game: mostly low obstacles
+    // Mid game: mix of low and medium
+    // Late game: more tall obstacles requiring higher jumps
+    let heightMultiplier = 1;
+    const scoreSegment = Math.floor(scoreRef.current / 1000);
+    
+    if (scoreSegment < 2) {
+      // Early game: 80% low, 20% medium
+      heightMultiplier = Math.random() < 0.8 ? 1 : 1.5;
+    } else if (scoreSegment < 5) {
+      // Mid game: 50% low, 40% medium, 10% tall
+      const rand = Math.random();
+      if (rand < 0.5) heightMultiplier = 1;
+      else if (rand < 0.9) heightMultiplier = 1.5;
+      else heightMultiplier = 2;
+    } else {
+      // Late game: 30% low, 40% medium, 30% tall
+      const rand = Math.random();
+      if (rand < 0.3) heightMultiplier = 1;
+      else if (rand < 0.7) heightMultiplier = 1.5;
+      else heightMultiplier = 2;
+    }
     
     obstaclesRef.current.push({
       x: dimensions.width + 50,
       type,
       passed: false,
+      height: heightMultiplier,
     });
 
-    // Randomize next interval
-    nextObstacleIntervalRef.current = Math.floor(
+    // Vary interval based on score segments - create waves of obstacles
+    const baseInterval = Math.floor(
       Math.random() * (OBSTACLE_INTERVAL_MAX - OBSTACLE_INTERVAL_MIN) + OBSTACLE_INTERVAL_MIN
     );
     
-    // Decrease interval as game speeds up
+    // Create obstacle clusters at certain intervals
+    const clusterChance = scoreSegment % 3 === 0 ? 0.3 : 0.1;
+    if (Math.random() < clusterChance) {
+      // Spawn another obstacle soon after (cluster)
+      nextObstacleIntervalRef.current = Math.max(30, baseInterval * 0.4);
+    } else {
+      nextObstacleIntervalRef.current = baseInterval;
+    }
+    
+    // Gradually decrease interval as game speeds up, but not too fast
     nextObstacleIntervalRef.current = Math.max(
-      60,
-      nextObstacleIntervalRef.current - Math.floor(scoreRef.current / 500)
+      40,
+      nextObstacleIntervalRef.current - Math.floor(scoreRef.current / 1000)
     );
   }, [dimensions.width]);
 
@@ -239,6 +288,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
         // Award coins every 100m
         if (scoreRef.current % 1000 === 0) {
           addCoins(1);
+          if (soundEnabled) playSound('coin');
         }
 
         // Gradually increase speed
@@ -258,13 +308,16 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
           invincibleFramesRef.current--;
         }
 
-        // Update obstacles
+        // Update obstacles - only move when actively playing
         const groundY = dimensions.height - GROUND_Y_OFFSET;
         const surferX = 80;
         
         for (let i = obstaclesRef.current.length - 1; i >= 0; i--) {
           const obstacle = obstaclesRef.current[i];
-          obstacle.x -= currentSpeed;
+          // Only move obstacles when actively playing
+          if (gameState === 'playing') {
+            obstacle.x -= currentSpeed;
+          }
 
           // Remove off-screen obstacles
           if (obstacle.x < -100) {
@@ -272,27 +325,33 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
             continue;
           }
 
-          // Draw obstacle
+          // Draw obstacle with height multiplier
           const obsDims = OBSTACLE_DIMENSIONS[obstacle.type];
-          const obsY = groundY - obsDims.height * SURFER_SCALE + 20;
-          drawObstacle(ctx, obstacle.type, obstacle.x, obsY, SURFER_SCALE);
+          const baseHeight = obsDims.height * CHARACTER_SCALE;
+          const adjustedHeight = baseHeight * obstacle.height;
+          const obsY = groundY - adjustedHeight + 20;
+          
+          // Scale the obstacle drawing based on height multiplier
+          const drawScale = CHARACTER_SCALE * obstacle.height;
+          drawObstacle(ctx, obstacle.type, obstacle.x, obsY, drawScale);
 
-          // Check if passed (score point)
-          if (!obstacle.passed && obstacle.x + obsDims.width * SURFER_SCALE < surferX) {
+          // Check if passed (score point) - only when actively playing
+          if (gameState === 'playing' && !obstacle.passed && obstacle.x + obsDims.width * drawScale < surferX) {
             obstacle.passed = true;
+            if (soundEnabled) playSound('obstaclePass');
           }
 
-          // Collision detection
-          if (invincibleFramesRef.current === 0) {
+          // Collision detection - only when actively playing
+          if (gameState === 'playing' && invincibleFramesRef.current === 0) {
             const surferLeft = surferX + 10;
-            const surferRight = surferX + SURFER_WIDTH * SURFER_SCALE - 10;
+            const surferRight = surferX + CHARACTER_WIDTH * CHARACTER_SCALE - 10;
             const surferTop = surferYRef.current + 10;
-            const surferBottom = surferYRef.current + SURFER_HEIGHT * SURFER_SCALE;
+            const surferBottom = surferYRef.current + CHARACTER_HEIGHT * CHARACTER_SCALE;
 
             const obsLeft = obstacle.x + 5;
-            const obsRight = obstacle.x + obsDims.width * SURFER_SCALE - 5;
+            const obsRight = obstacle.x + obsDims.width * drawScale - 5;
             const obsTop = obsY + 5;
-            const obsBottom = obsY + obsDims.height * SURFER_SCALE;
+            const obsBottom = obsY + adjustedHeight;
 
             const collides = 
               surferLeft < obsRight &&
@@ -306,16 +365,19 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
                 deactivatePowerUp('shield');
                 obstacle.passed = true;
                 invincibleFramesRef.current = 60;
+                if (soundEnabled) playSound('powerup');
               } else {
                 // Lose a life
                 livesRef.current--;
                 setLives(livesRef.current);
                 obstacle.passed = true;
                 invincibleFramesRef.current = 120;
+                if (soundEnabled) playSound('collision');
 
                 if (livesRef.current <= 0) {
                   // Game over
                   setGameState('gameover');
+                  if (soundEnabled) playSound('gameOver');
                   onGameOver?.(Math.floor(scoreRef.current / 10));
                 }
               }
@@ -323,8 +385,8 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
           }
         }
 
-        // Update surfer physics
-        const groundYSurfer = dimensions.height - GROUND_Y_OFFSET - SURFER_HEIGHT * SURFER_SCALE;
+        // Update character physics
+        const groundYSurfer = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
         
         velocityYRef.current += GRAVITY;
         surferYRef.current += velocityYRef.current;
@@ -339,11 +401,11 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
       // Draw ground
       drawGround(ctx, dimensions.width, dimensions.height, currentTheme, scrollOffsetRef.current);
 
-      // Draw surfer (blink when invincible)
+      // Draw character (blink when invincible)
       const shouldDraw = invincibleFramesRef.current === 0 || Math.floor(invincibleFramesRef.current / 5) % 2 === 0;
       if (shouldDraw) {
-        const surferX = 80;
-        drawSurfer(ctx, surferX, surferYRef.current, SURFER_SCALE, isJumpingRef.current);
+        const characterX = 80;
+        drawCharacter(ctx, characterType, characterX, surferYRef.current, CHARACTER_SCALE, isJumpingRef.current);
       }
 
       // Draw UI overlays
@@ -376,6 +438,9 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
     onGameOver,
     addCoins,
     deactivatePowerUp,
+    characterType,
+    strengths,
+    soundEnabled,
   ]);
 
   return (

@@ -2,9 +2,11 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useGameStore, GameTheme } from '@/stores/gameStore';
-import { drawSurfer, SURFER_WIDTH, SURFER_HEIGHT } from './sprites/Surfer';
+import { useCharacterStore, CharacterType } from '@/stores/characterStore';
+import { drawCharacter, CHARACTER_WIDTH, CHARACTER_HEIGHT } from './sprites/CharacterSprites';
 import { drawObstacle, OBSTACLE_DIMENSIONS } from './sprites/Obstacles';
 import { drawBackground, drawGround } from './sprites/Background';
+import { playSound } from '@/lib/sounds';
 
 interface Obstacle {
   x: number;
@@ -14,6 +16,7 @@ interface Obstacle {
 
 interface RunnerGameProps {
   onObstacleCleared?: () => void;
+  disableSounds?: boolean;
 }
 
 const GRAVITY = 0.8;
@@ -22,15 +25,15 @@ const DOUBLE_JUMP_FORCE = -12;
 const GAME_SPEED_INITIAL = 5;
 const GAME_SPEED_MAX = 12;
 const GROUND_Y_OFFSET = 80;
-const SURFER_SCALE = 2;
+const CHARACTER_SCALE = 2;
 
-export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
+export function RunnerGame({ onObstacleCleared, disableSounds = false }: RunnerGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(0);
   
   // Game state refs (for animation loop)
-  const surferYRef = useRef<number>(0);
+  const characterYRef = useRef<number>(0);
   const velocityYRef = useRef<number>(0);
   const isJumpingRef = useRef<boolean>(false);
   const canDoubleJumpRef = useRef<boolean>(false);
@@ -51,7 +54,13 @@ export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
     activePowerUps,
     currentTheme,
     setPlaying,
+    soundEnabled,
   } = useGameStore();
+
+  // Get character info
+  const { selectedCharacter, getStrengths } = useCharacterStore();
+  const characterType: CharacterType = selectedCharacter || 'surfer';
+  const strengths = getStrengths();
 
   // Handle resize
   useEffect(() => {
@@ -70,11 +79,11 @@ export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
   // Initialize ground position
   useEffect(() => {
     if (dimensions.height > 0) {
-      surferYRef.current = dimensions.height - GROUND_Y_OFFSET - SURFER_HEIGHT * SURFER_SCALE;
+      characterYRef.current = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
     }
   }, [dimensions.height]);
 
-  // Check power-ups
+  // Check power-ups and apply character strengths
   useEffect(() => {
     canDoubleJumpRef.current = activePowerUps.includes('double-jump');
     hasShieldRef.current = activePowerUps.includes('shield');
@@ -96,24 +105,31 @@ export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
     });
   }, [dimensions.width]);
 
-  // Jump handler
+  // Jump handler - applies character jump strength
   const handleJump = useCallback(() => {
-    const groundY = dimensions.height - GROUND_Y_OFFSET - SURFER_HEIGHT * SURFER_SCALE;
-    const isOnGround = surferYRef.current >= groundY - 5;
+    const groundY = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
+    const isOnGround = characterYRef.current >= groundY - 5;
+    
+    // Apply character jump strength modifier
+    const jumpMultiplier = strengths?.jumpHeight || 1;
+    const adjustedJumpForce = JUMP_FORCE * jumpMultiplier;
+    const adjustedDoubleJumpForce = DOUBLE_JUMP_FORCE * (strengths?.doubleJump || 1);
 
     if (isOnGround) {
-      velocityYRef.current = JUMP_FORCE;
+      velocityYRef.current = adjustedJumpForce;
       isJumpingRef.current = true;
       hasDoubleJumpedRef.current = false;
       
       if (!isPlaying) {
         setPlaying(true);
       }
+      if (soundEnabled && !disableSounds) playSound('jump');
     } else if (canDoubleJumpRef.current && !hasDoubleJumpedRef.current) {
-      velocityYRef.current = DOUBLE_JUMP_FORCE;
+      velocityYRef.current = adjustedDoubleJumpForce;
       hasDoubleJumpedRef.current = true;
+      if (soundEnabled && !disableSounds) playSound('doubleJump');
     }
-  }, [dimensions.height, isPlaying, setPlaying]);
+  }, [dimensions.height, isPlaying, setPlaying, strengths, soundEnabled]);
 
   // Keyboard controls
   useEffect(() => {
@@ -184,12 +200,15 @@ export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
           obstacleTimer = 0;
         }
 
-        // Update obstacles
+        // Update obstacles - only move when actively playing
         const groundY = dimensions.height - GROUND_Y_OFFSET;
         
         for (let i = obstaclesRef.current.length - 1; i >= 0; i--) {
           const obstacle = obstaclesRef.current[i];
-          obstacle.x -= gameSpeedRef.current;
+          // Only move obstacles when actively playing
+          if (isPlaying && !isPaused) {
+            obstacle.x -= gameSpeedRef.current;
+          }
 
           // Remove off-screen obstacles
           if (obstacle.x < -100) {
@@ -199,52 +218,57 @@ export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
 
           // Draw obstacle
           const obsDims = OBSTACLE_DIMENSIONS[obstacle.type];
-          const obsY = groundY - obsDims.height * SURFER_SCALE + 15;
-          drawObstacle(ctx, obstacle.type, obstacle.x, obsY, SURFER_SCALE);
+          const obsY = groundY - obsDims.height * CHARACTER_SCALE + 15;
+          drawObstacle(ctx, obstacle.type, obstacle.x, obsY, CHARACTER_SCALE);
 
-          // Check if passed
-          const surferX = 100;
-          if (!obstacle.passed && obstacle.x + obsDims.width * SURFER_SCALE < surferX) {
+          // Check if passed - only when actively playing
+          const characterX = 100;
+          if (isPlaying && !isPaused && !obstacle.passed && obstacle.x + obsDims.width * CHARACTER_SCALE < characterX) {
             obstacle.passed = true;
+            if (soundEnabled && !disableSounds) playSound('obstaclePass');
             onObstacleCleared?.();
           }
 
-          // Collision detection
-          const surferLeft = surferX;
-          const surferRight = surferX + SURFER_WIDTH * SURFER_SCALE;
-          const surferTop = surferYRef.current;
-          const surferBottom = surferYRef.current + SURFER_HEIGHT * SURFER_SCALE;
+          // Collision detection - only when actively playing
+          if (isPlaying && !isPaused) {
+            const characterLeft = characterX;
+            const characterRight = characterX + CHARACTER_WIDTH * CHARACTER_SCALE;
+            const characterTop = characterYRef.current;
+            const characterBottom = characterYRef.current + CHARACTER_HEIGHT * CHARACTER_SCALE;
 
-          const obsLeft = obstacle.x;
-          const obsRight = obstacle.x + obsDims.width * SURFER_SCALE;
-          const obsTop = obsY;
-          const obsBottom = obsY + obsDims.height * SURFER_SCALE;
+            const obsLeft = obstacle.x;
+            const obsRight = obstacle.x + obsDims.width * CHARACTER_SCALE;
+            const obsTop = obsY;
+            const obsBottom = obsY + obsDims.height * CHARACTER_SCALE;
 
-          const collides = 
-            surferLeft < obsRight &&
-            surferRight > obsLeft &&
-            surferTop < obsBottom &&
-            surferBottom > obsTop;
+            const collides = 
+              characterLeft < obsRight &&
+              characterRight > obsLeft &&
+              characterTop < obsBottom &&
+              characterBottom > obsTop;
 
-          if (collides && !obstacle.passed) {
-            if (hasShieldRef.current) {
-              hasShieldRef.current = false;
-              obstacle.passed = true; // Don't collide again
-            } else {
-              // Stumble effect - just continue, no game over
-              obstacle.passed = true;
+            if (collides && !obstacle.passed) {
+              if (hasShieldRef.current) {
+                hasShieldRef.current = false;
+                obstacle.passed = true; // Don't collide again
+                if (soundEnabled && !disableSounds) playSound('powerup');
+              } else {
+                // Stumble effect - just continue, no game over
+                obstacle.passed = true;
+                if (soundEnabled && !disableSounds) playSound('collision');
+              }
             }
           }
         }
 
-        // Update surfer physics
-        const groundYSurfer = dimensions.height - GROUND_Y_OFFSET - SURFER_HEIGHT * SURFER_SCALE;
+        // Update character physics
+        const groundYCharacter = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
         
         velocityYRef.current += GRAVITY;
-        surferYRef.current += velocityYRef.current;
+        characterYRef.current += velocityYRef.current;
 
-        if (surferYRef.current >= groundYSurfer) {
-          surferYRef.current = groundYSurfer;
+        if (characterYRef.current >= groundYCharacter) {
+          characterYRef.current = groundYCharacter;
           velocityYRef.current = 0;
           isJumpingRef.current = false;
         }
@@ -253,9 +277,9 @@ export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
       // Draw ground details
       drawGround(ctx, dimensions.width, dimensions.height, currentTheme, scrollOffsetRef.current);
 
-      // Draw surfer
-      const surferX = 100;
-      drawSurfer(ctx, surferX, surferYRef.current, SURFER_SCALE, isJumpingRef.current);
+      // Draw character using the character system
+      const characterX = 100;
+      drawCharacter(ctx, characterType, characterX, characterYRef.current, CHARACTER_SCALE, isJumpingRef.current);
 
       // Draw score
       ctx.fillStyle = '#ffffff';
@@ -279,9 +303,11 @@ export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
     isPaused,
     isPlaying,
     currentTheme,
+    characterType,
     setScore,
     spawnObstacle,
     onObstacleCleared,
+    soundEnabled,
   ]);
 
   // Update high score when game ends or pauses
@@ -303,4 +329,3 @@ export function RunnerGame({ onObstacleCleared }: RunnerGameProps) {
 }
 
 export default RunnerGame;
-

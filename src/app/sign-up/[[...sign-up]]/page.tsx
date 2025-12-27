@@ -1,12 +1,33 @@
 'use client';
 
-import { SignUp } from '@clerk/nextjs';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { SimpleAuthForm } from '@/components/auth/SimpleAuthForm';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignUpPage() {
-  const [authType, setAuthType] = useState<'simple' | 'clerk'>('simple');
+  const router = useRouter();
+  const { isLoaded, isSignedIn } = useAuth();
   const [simpleMode, setSimpleMode] = useState<'signin' | 'signup'>('signup');
+
+  // Redirect if already signed in
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.push('/');
+    }
+  }, [isLoaded, isSignedIn, router]);
+
+  const handleSuccess = () => {
+    router.push('/');
+  };
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-pixel-black">
+        <div className="font-pixel text-foamy-green animate-pulse">LOADING...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-pixel-black p-4">
@@ -17,76 +38,23 @@ export default function SignUpPage() {
         />
         
         {/* Content */}
-        <div className="relative z-10 min-w-[320px]">
-          <h1 className="font-pixel text-ocean-blue text-center text-lg mb-2 px-4">
+        <div className="relative z-10 min-w-[320px] p-4">
+          <h1 className="font-pixel text-ocean-blue text-center text-lg mb-2">
             NEW PLAYER
           </h1>
           
-          {/* Auth Type Switcher */}
-          <div className="flex justify-center gap-4 mb-6">
-            <button
-              onClick={() => setAuthType('simple')}
-              className={`font-pixel text-xs px-3 py-2 border-2 transition-all ${
-                authType === 'simple'
-                  ? 'bg-foamy-green text-pixel-black border-foamy-green'
-                  : 'bg-transparent text-gray-400 border-pixel-shadow hover:border-foamy-green hover:text-foamy-green'
-              }`}
-            >
-              QUICK SIGNUP
-            </button>
-            <button
-              onClick={() => setAuthType('clerk')}
-              className={`font-pixel text-xs px-3 py-2 border-2 transition-all ${
-                authType === 'clerk'
-                  ? 'bg-ocean-blue text-white border-ocean-blue'
-                  : 'bg-transparent text-gray-400 border-pixel-shadow hover:border-ocean-blue hover:text-ocean-blue'
-              }`}
-            >
-              EMAIL SIGNUP
-            </button>
-          </div>
+          <p className="font-lcd text-gray-400 text-center text-sm mb-6">
+            {simpleMode === 'signup' 
+              ? 'Create your account! No email needed - just pick a username.'
+              : 'Already have an account? Sign in below.'
+            }
+          </p>
 
-          {/* Simple Auth (Username/Password) */}
-          {authType === 'simple' && (
-            <div className="px-4">
-              <p className="font-lcd text-gray-400 text-center text-sm mb-4">
-                No email needed! Just pick a username.
-              </p>
-              <SimpleAuthForm 
-                mode={simpleMode} 
-                onModeChange={setSimpleMode}
-              />
-            </div>
-          )}
-
-          {/* Clerk Auth (Email) */}
-          {authType === 'clerk' && (
-            <SignUp 
-              appearance={{
-                elements: {
-                  rootBox: 'mx-auto',
-                  card: 'bg-pixel-black border-4 border-pixel-shadow shadow-none',
-                  headerTitle: 'font-pixel text-ocean-blue text-sm',
-                  headerSubtitle: 'font-lcd text-gray-400',
-                  socialButtonsBlockButton: 'bg-foamy-green border-2 border-pixel-black font-pixel text-xs text-pixel-black hover:bg-foamy-green/80',
-                  formButtonPrimary: 'bg-ocean-blue text-white border-2 border-pixel-black font-pixel text-xs hover:bg-ocean-blue/80',
-                  formFieldInput: 'bg-pixel-black border-2 border-pixel-shadow text-white font-lcd focus:border-ocean-blue',
-                  formFieldLabel: 'font-lcd text-gray-300',
-                  footerActionLink: 'text-ocean-blue font-lcd hover:text-foamy-green',
-                  identityPreviewText: 'font-lcd text-white',
-                  identityPreviewEditButton: 'text-ocean-blue font-lcd',
-                },
-                variables: {
-                  colorPrimary: '#4A90D9',
-                  colorBackground: '#1a1a1a',
-                  colorText: '#ffffff',
-                  colorInputBackground: '#1a1a1a',
-                  colorInputText: '#ffffff',
-                  borderRadius: '0px',
-                },
-              }}
-            />
-          )}
+          <SimpleAuthForm 
+            mode={simpleMode} 
+            onModeChange={setSimpleMode}
+            onSuccess={handleSuccess}
+          />
         </div>
         
         {/* Corner decorations */}

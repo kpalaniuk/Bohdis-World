@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { useUser as useClerkUser, useClerk } from '@clerk/nextjs';
 import { 
   SimpleUser, 
   UserRole,
@@ -28,7 +27,7 @@ interface AuthUser {
   id: string;
   username: string | null;
   displayName: string | null;
-  authMethod: 'clerk' | 'simple';
+  authMethod: 'simple';
   role: UserRole;
   canGiftItems: boolean;
 }
@@ -37,7 +36,7 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoaded: boolean;
   isSignedIn: boolean;
-  authMethod: 'clerk' | 'simple' | null;
+  authMethod: 'simple' | null;
   isSyncing: boolean;
   
   // Role helpers
@@ -53,9 +52,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn, user: clerkUser } = useClerkUser();
-  const { signOut: clerkSignOut } = useClerk();
-  
   const [simpleUser, setSimpleUser] = useState<SimpleUser | null>(null);
   const [simpleLoaded, setSimpleLoaded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -76,23 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Determine current auth state
-  const isLoaded = clerkLoaded && simpleLoaded;
-  const isSignedIn = clerkSignedIn || !!simpleUser;
+  const isLoaded = simpleLoaded;
+  const isSignedIn = !!simpleUser;
   
-  const authMethod = clerkSignedIn ? 'clerk' : simpleUser ? 'simple' : null;
+  const authMethod = simpleUser ? 'simple' : null;
 
   // Build unified user object
   const user: AuthUser | null = React.useMemo(() => {
-    if (clerkSignedIn && clerkUser) {
-      return {
-        id: clerkUser.id,
-        username: clerkUser.username,
-        displayName: clerkUser.firstName || clerkUser.username || null,
-        authMethod: 'clerk' as const,
-        role: 'user' as UserRole, // Clerk users default to regular user
-        canGiftItems: false,
-      };
-    }
     if (simpleUser) {
       return {
         id: simpleUser.id,
@@ -104,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
     return null;
-  }, [clerkSignedIn, clerkUser, simpleUser]);
+  }, [simpleUser]);
 
   // Sync progress when user signs in
   useEffect(() => {
@@ -206,14 +192,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Reset sync ref on sign out
     hasSyncedRef.current = null;
     
-    if (clerkSignedIn) {
-      await clerkSignOut();
-    }
     if (simpleUser) {
       clearSession();
       setSimpleUser(null);
     }
-  }, [clerkSignedIn, clerkSignOut, simpleUser]);
+  }, [simpleUser]);
 
   // Role helpers
   const isAdmin = checkIsAdmin(simpleUser);
@@ -244,4 +227,3 @@ export function useAuth() {
   }
   return context;
 }
-

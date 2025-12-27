@@ -1,48 +1,12 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Check if Clerk is configured
-const isClerkConfigured = !!(
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && 
-  process.env.CLERK_SECRET_KEY
-);
-
-// Define public routes that don't require authentication
-// Note: profile, settings, admin are included because they handle their own auth
-// via useAuth hook (supports both Clerk and simple auth)
-const isPublicRoute = createRouteMatcher([
-  '/',
-  '/sign-in(.*)',
-  '/sign-up(.*)',
-  '/calculator',
-  '/math',
-  '/game',
-  '/profile',
-  '/settings',
-  '/admin',
-]);
-
-// Clerk middleware handler
-const clerkHandler = clerkMiddleware(async (auth, request) => {
-  // Allow public routes without authentication
-  if (isPublicRoute(request)) {
-    return;
-  }
-  
-  // For all other routes, protect them (require auth)
-  await auth.protect();
-});
-
-// Export middleware that handles both configured and unconfigured Clerk
+// Simple middleware - no Clerk, just pass through all requests
+// Authentication is handled client-side via useAuth hook and simple auth
 export default function middleware(request: NextRequest) {
-  // If Clerk isn't configured, just pass through
-  if (!isClerkConfigured) {
-    return NextResponse.next();
-  }
-  
-  // Use Clerk middleware
-  return clerkHandler(request, {} as any);
+  // Allow all requests to pass through
+  // Auth is handled at the component level using the AuthContext
+  return NextResponse.next();
 }
 
 export const config = {
@@ -53,4 +17,3 @@ export const config = {
     '/(api|trpc)(.*)',
   ],
 };
-

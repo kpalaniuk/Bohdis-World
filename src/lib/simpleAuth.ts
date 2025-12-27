@@ -109,6 +109,18 @@ export async function signUpSimple(
         unlocked_themes: ['default'],
         unlocked_powerups: [],
       });
+      
+      // Log signup activity
+      try {
+        await supabase.from('user_activities').insert({
+          user_id: profile.id,
+          activity_type: 'signup',
+          activity_data: {},
+        });
+      } catch (err) {
+        // Activity logging is optional, don't fail signup if it fails
+        console.warn('Failed to log signup activity:', err);
+      }
     }
 
     return { user: newUser as SimpleUser, error: null };
@@ -151,6 +163,16 @@ export async function signInSimple(
       .from('simple_users')
       .update({ last_login_at: new Date().toISOString() })
       .eq('id', user.id);
+
+    // Log login activity (non-blocking)
+    try {
+      const { logActivity } = await import('./activityTracking');
+      logActivity(user.id, 'login').catch(() => {
+        // Silently fail - activity tracking is optional
+      });
+    } catch {
+      // Ignore errors - activity tracking is optional
+    }
 
     // Return user without password hash
     const { password_hash: _, ...safeUser } = user;
@@ -227,6 +249,11 @@ export interface AdminUserView {
     unlocked_themes: string[];
     unlocked_powerups: string[];
   };
+  recentActivities?: Array<{
+    activity_type: string;
+    activity_data: Record<string, unknown>;
+    created_at: string;
+  }>;
 }
 
 export async function getAllUsers(): Promise<AdminUserView[]> {
@@ -255,7 +282,7 @@ export async function getAllUsers(): Promise<AdminUserView[]> {
       return [];
     }
 
-    // Fetch profiles and progress for each user
+    // Fetch profiles, progress, and recent activities for each user
     const usersWithDetails: AdminUserView[] = await Promise.all(
       users.map(async (user) => {
         const { data: profile } = await db
@@ -265,6 +292,7 @@ export async function getAllUsers(): Promise<AdminUserView[]> {
           .single();
 
         let progress = null;
+        let recentActivities = null;
         if (profile) {
           const { data: progressData } = await db
             .from('user_progress')
@@ -272,12 +300,22 @@ export async function getAllUsers(): Promise<AdminUserView[]> {
             .eq('user_id', profile.id)
             .single();
           progress = progressData;
+          
+          // Get recent activities
+          const { data: activities } = await db
+            .from('user_activities')
+            .select('activity_type, activity_data, created_at')
+            .eq('user_id', profile.id)
+            .order('created_at', { ascending: false })
+            .limit(10);
+          recentActivities = activities || [];
         }
 
         return {
           ...user,
           profile: profile || undefined,
           progress: progress || undefined,
+          recentActivities: recentActivities || undefined,
         };
       })
     );
@@ -579,6 +617,94 @@ export async function unlockItemForUser(
     return { success: true, error: null };
   } catch (err) {
     console.error('Error in unlockItemForUser:', err);
+    return { success: false, error: 'Something went wrong' };
+  }
+}
+
+export async function deleteUser(
+  adminUser: SimpleUser,
+  targetUserId: string
+): Promise<{ success: boolean; error: string | null }> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { success: false, error: 'Database not configured' };
+  }
+
+  // Only admins/superusers can delete users
+  if (!isAdmin(adminUser)) {
+    return { success: false, error: 'You do not have permission to delete users' };
+  }
+
+  // Prevent deleting yourself
+  if (targetUserId === adminUser.id) {
+    return { success: false, error: 'You cannot delete your own account' };
+  }
+
+  try {
+    // Get target user to check their role
+    const { data: targetUser, error: fetchError } = await supabase
+      .from('simple_users')
+      .select('id, role')
+      .eq('id', targetUserId)
+      .single();
+
+    if (fetchError || !targetUser) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Only superusers can delete other superusers
+    if (targetUser.role === 'superuser' && !isSuperuser(adminUser)) {
+      return { success: false, error: 'Only superusers can delete superuser accounts' };
+    }
+
+    // Get user profile first
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('simple_user_id', targetUserId)
+      .single();
+
+    // Delete in order: user_progress, calculation_history, math_history, user_profiles, simple_users
+    if (profile) {
+      // Delete user progress
+      await supabase
+        .from('user_progress')
+        .delete()
+        .eq('user_id', profile.id);
+
+      // Delete calculation history (if table exists)
+      await supabase
+        .from('calculation_history')
+        .delete()
+        .eq('user_id', profile.id);
+
+      // Delete math history (if table exists)
+      await supabase
+        .from('math_history')
+        .delete()
+        .eq('user_id', profile.id);
+
+      // Delete user profile
+      await supabase
+        .from('user_profiles')
+        .delete()
+        .eq('id', profile.id);
+    }
+
+    // Finally, delete the user account
+    const { error: deleteError } = await supabase
+      .from('simple_users')
+      .delete()
+      .eq('id', targetUserId);
+
+    if (deleteError) {
+      console.error('Error deleting user:', deleteError);
+      return { success: false, error: 'Failed to delete user account' };
+    }
+
+    console.log(`Admin ${adminUser.username} deleted user ${targetUserId}`);
+    return { success: true, error: null };
+  } catch (err) {
+    console.error('Error in deleteUser:', err);
     return { success: false, error: 'Something went wrong' };
   }
 }

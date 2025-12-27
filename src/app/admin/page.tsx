@@ -17,7 +17,9 @@ import {
   Palette,
   Zap,
   Key,
-  AlertTriangle
+  AlertTriangle,
+  Trash2,
+  Settings
 } from 'lucide-react';
 import { PixelCard } from '@/components/ui/PixelCard';
 import { PixelButton } from '@/components/ui/PixelButton';
@@ -28,6 +30,7 @@ import {
   updateUserRole, 
   resetUserPassword,
   unlockItemForUser,
+  deleteUser,
   AdminUserView,
   UserRole,
   SimpleUser
@@ -64,6 +67,7 @@ export default function AdminPage() {
   const [giftAmount, setGiftAmount] = useState<{ [key: string]: number }>({});
   const [newPasswords, setNewPasswords] = useState<{ [key: string]: string }>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteConfirmUserId, setDeleteConfirmUserId] = useState<string | null>(null);
 
   // Check admin access
   useEffect(() => {
@@ -215,6 +219,31 @@ export default function AdminPage() {
     setActionLoading(null);
   };
 
+  const handleDeleteUser = async (targetUserId: string) => {
+    setActionLoading(`delete-${targetUserId}`);
+    
+    const adminUser: SimpleUser = {
+      id: user!.id,
+      username: user!.username!,
+      display_name: user!.displayName,
+      created_at: '',
+      role: user!.role,
+      can_gift_items: user!.canGiftItems,
+    };
+    
+    const result = await deleteUser(adminUser, targetUserId);
+    
+    if (result.success) {
+      showMessage('success', 'User account deleted successfully');
+      setDeleteConfirmUserId(null);
+      await handleRefresh();
+    } else {
+      showMessage('error', result.error || 'Failed to delete user');
+    }
+    
+    setActionLoading(null);
+  };
+
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
       case 'superuser': return 'bg-purple-600 text-white';
@@ -228,6 +257,29 @@ export default function AdminPage() {
       case 'superuser': return <Crown size={12} />;
       case 'admin': return <Shield size={12} />;
       default: return null;
+    }
+  };
+
+  const formatActivity = (type: string, data: Record<string, unknown>): string => {
+    switch (type) {
+      case 'login':
+        return '🔐 Logged in';
+      case 'signup':
+        return '✨ Created account';
+      case 'game_played':
+        return `🎮 Played ${data.game || 'game'}`;
+      case 'math_problem':
+        return `🧮 Solved math problem (${data.grade || '?'})`;
+      case 'calculator_used':
+        return '🔢 Used calculator';
+      case 'shop_purchase':
+        return `🛒 Purchased ${data.item || 'item'}`;
+      case 'level_complete':
+        return `🏆 Completed level ${data.level || '?'} in ${data.game || 'game'}`;
+      case 'high_score':
+        return `⭐ New high score: ${data.score || 0} in ${data.game || 'game'}`;
+      default:
+        return `📝 ${type}`;
     }
   };
 
@@ -275,6 +327,16 @@ export default function AdminPage() {
               Welcome, {user?.displayName || user?.username}!
             </p>
           </div>
+          {isSuperuser && (
+            <PixelButton
+              variant="primary"
+              size="sm"
+              onClick={() => router.push('/admin/game-settings')}
+            >
+              <Settings className="mr-2" size={16} />
+              Game Settings
+            </PixelButton>
+          )}
           <PixelButton
             variant="secondary"
             size="sm"
@@ -598,6 +660,46 @@ export default function AdminPage() {
                         </PixelButton>
                       </div>
 
+                      {/* Delete Account */}
+                      {targetUser.id !== user?.id && (
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t-2 border-red-900/30">
+                          <Trash2 className="text-red-500" size={18} />
+                          <span className="font-lcd text-gray-300 text-sm">Delete Account:</span>
+                          {deleteConfirmUserId === targetUser.id ? (
+                            <div className="flex items-center gap-2">
+                              <span className="font-lcd text-red-400 text-xs">Confirm deletion?</span>
+                              <PixelButton
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleDeleteUser(targetUser.id)}
+                                disabled={actionLoading === `delete-${targetUser.id}`}
+                                className="bg-red-900/50 border-red-500 text-red-300 hover:bg-red-800/50"
+                              >
+                                {actionLoading === `delete-${targetUser.id}` ? '...' : 'YES, DELETE'}
+                              </PixelButton>
+                              <PixelButton
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setDeleteConfirmUserId(null)}
+                                disabled={actionLoading === `delete-${targetUser.id}`}
+                              >
+                                CANCEL
+                              </PixelButton>
+                            </div>
+                          ) : (
+                            <PixelButton
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setDeleteConfirmUserId(targetUser.id)}
+                              disabled={actionLoading === `delete-${targetUser.id}`}
+                              className="bg-red-900/50 border-red-500 text-red-300 hover:bg-red-800/50"
+                            >
+                              DELETE ACCOUNT
+                            </PixelButton>
+                          )}
+                        </div>
+                      )}
+
                       {/* User Meta */}
                       <div className="pt-3 border-t-2 border-pixel-shadow font-lcd text-gray-500 text-xs flex flex-wrap gap-4">
                         <span>ID: {targetUser.id.slice(0, 8)}...</span>
@@ -606,6 +708,28 @@ export default function AdminPage() {
                           <span>Last login: {new Date(targetUser.last_login_at).toLocaleDateString()}</span>
                         )}
                       </div>
+
+                      {/* Activity History */}
+                      {targetUser.recentActivities && targetUser.recentActivities.length > 0 && (
+                        <div className="pt-3 border-t-2 border-pixel-shadow">
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle className="text-ocean-blue" size={16} />
+                            <span className="font-lcd text-gray-300 text-sm">Recent Activity:</span>
+                          </div>
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {targetUser.recentActivities.slice(0, 5).map((activity, idx) => (
+                              <div key={idx} className="font-lcd text-gray-400 text-xs flex items-center gap-2">
+                                <span className="text-gray-600">
+                                  {new Date(activity.created_at).toLocaleString()}
+                                </span>
+                                <span className="text-foamy-green">
+                                  {formatActivity(activity.activity_type, activity.activity_data)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

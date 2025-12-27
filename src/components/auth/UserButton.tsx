@@ -1,16 +1,20 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { LogOut, User, Settings, RefreshCw, Cloud } from 'lucide-react';
+import { LogOut, User, Settings, RefreshCw, Cloud, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCharacterStore, CHARACTERS } from '@/stores/characterStore';
 
 export function UserButton() {
   const router = useRouter();
-  const { user, isLoaded, isSignedIn, signOut, authMethod, isSyncing } = useAuth();
+  const { user, isLoaded, isSignedIn, signOut, isSyncing } = useAuth();
+  const { selectedCharacter } = useCharacterStore();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const character = selectedCharacter ? CHARACTERS[selectedCharacter] : null;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -51,7 +55,6 @@ export function UserButton() {
   }
 
   const displayName = user.displayName || user.username || 'Player';
-  const initials = displayName[0]?.toUpperCase() || 'P';
 
   const handleSignOut = async () => {
     await signOut();
@@ -68,26 +71,29 @@ export function UserButton() {
         </div>
       )}
       
-      {/* Avatar button */}
+      {/* Avatar button - shows character or initial */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`
           w-10 h-10
-          bg-ocean-blue
           border-4 border-pixel-black
           flex items-center justify-center
           font-pixel text-sm text-white
-          hover:bg-[#5ba0e9]
           transition-colors
           cursor-pointer
           ${isSyncing ? 'opacity-75' : ''}
         `}
         style={{ 
           boxShadow: '3px 3px 0px #2d2d2d',
+          backgroundColor: character?.primaryColor || '#4A90D9',
           imageRendering: 'pixelated',
         }}
       >
-        {initials}
+        {character ? (
+          <span className="text-lg">{character.emoji}</span>
+        ) : (
+          displayName[0]?.toUpperCase() || 'P'
+        )}
       </button>
 
       {/* Dropdown menu */}
@@ -95,7 +101,7 @@ export function UserButton() {
         <div
           className="
             absolute right-0 top-full mt-2
-            w-48
+            w-52
             bg-pixel-black
             border-4 border-pixel-shadow
             z-50
@@ -104,25 +110,22 @@ export function UserButton() {
         >
           {/* User info */}
           <div className="px-4 py-3 border-b-2 border-pixel-shadow">
-            <p className="font-pixel text-xs text-foamy-green truncate">
-              {displayName}
-            </p>
-            <p className="font-lcd text-sm text-gray-400 truncate">
-              @{user.username}
-            </p>
-            {/* Auth method badge */}
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`
-                inline-block px-2 py-0.5
-                font-lcd text-xs
-                border border-current
-                ${authMethod === 'simple' ? 'text-foamy-green' : 'text-ocean-blue'}
-              `}>
-                {authMethod === 'simple' ? 'QUICK' : 'EMAIL'}
-              </span>
-              
-              {/* Cloud sync status */}
-              <span className="flex items-center gap-1 text-gray-500 text-xs">
+            <div className="flex items-center gap-2">
+              {character && (
+                <span className="text-xl">{character.emoji}</span>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-pixel text-xs text-foamy-green truncate">
+                  {displayName}
+                </p>
+                <p className="font-lcd text-sm text-gray-400 truncate">
+                  @{user.username}
+                </p>
+              </div>
+            </div>
+            {/* Sync status */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="flex items-center gap-1 text-gray-500 text-xs font-lcd">
                 <Cloud size={12} />
                 {isSyncing ? 'Syncing...' : 'Synced'}
               </span>
@@ -144,7 +147,23 @@ export function UserButton() {
               "
             >
               <User size={16} className="text-foamy-green" />
-              Profile
+              Dashboard
+            </Link>
+
+            <Link
+              href="/shop"
+              onClick={() => setIsOpen(false)}
+              className="
+                w-full px-4 py-2
+                flex items-center gap-3
+                font-lcd text-white
+                hover:bg-pixel-shadow
+                transition-colors
+                cursor-pointer
+              "
+            >
+              <Sparkles size={16} className="text-yellow-400" />
+              Shop
             </Link>
 
             <Link
