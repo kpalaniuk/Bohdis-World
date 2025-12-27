@@ -190,61 +190,57 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
   // Login phase - show login form with Bohdi intro
   if (phase === 'login') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-pixel-black/90 p-4 overflow-y-auto">
-        <div 
-          className="w-full max-w-lg bg-pixel-black border-4 border-foamy-green p-6 md:p-8"
-          style={{ boxShadow: '8px 8px 0px #2d2d2d' }}
-        >
-          {/* Bohdi Intro */}
-          <div className="text-center mb-6">
-            <div className="mb-4 flex justify-center">
-              <div 
-                className="relative w-24 h-24 md:w-32 md:h-32 border-4 border-ocean-blue overflow-hidden"
-                style={{ boxShadow: '4px 4px 0px #2d2d2d' }}
-              >
-                <Image
-                  src="/bohdi.jpg"
-                  alt="Bohdi"
-                  fill
-                  className="object-cover"
-                  style={{ imageRendering: 'pixelated' }}
-                />
+      <div className="fixed inset-0 z-50 bg-pixel-black/90 overflow-y-auto">
+        <div className="min-h-full flex items-start md:items-center justify-center p-4 py-8">
+          <div 
+            className="w-full max-w-lg bg-pixel-black border-4 border-foamy-green p-5 md:p-8 my-auto"
+            style={{ boxShadow: '8px 8px 0px #2d2d2d' }}
+          >
+            {/* Bohdi Intro - smaller on mobile */}
+            <div className="text-center mb-4 md:mb-6">
+              <div className="mb-3 md:mb-4 flex justify-center">
+                <div 
+                  className="relative w-16 h-16 md:w-32 md:h-32 border-4 border-ocean-blue overflow-hidden"
+                  style={{ boxShadow: '4px 4px 0px #2d2d2d' }}
+                >
+                  <Image
+                    src="/bohdi.jpg"
+                    alt="Bohdi"
+                    fill
+                    className="object-cover"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                </div>
               </div>
+              
+              <h1 
+                className="font-pixel text-foamy-green text-lg md:text-2xl mb-2"
+                style={{ textShadow: '3px 3px 0px #2d2d2d' }}
+              >
+                HEY, I&apos;M BOHDI!
+              </h1>
+              
+              <p className="font-lcd text-white text-sm md:text-lg leading-relaxed">
+                Create a quick account to save your progress!
+              </p>
             </div>
-            
-            <h1 
-              className="font-pixel text-foamy-green text-xl md:text-2xl mb-3"
-              style={{ textShadow: '3px 3px 0px #2d2d2d' }}
-            >
-              HEY, I&apos;M BOHDI!
-            </h1>
-            
-            <p className="font-lcd text-white text-base md:text-lg leading-relaxed mb-2">
-              I&apos;m <span className="text-ocean-blue font-bold">8 years old</span> and 
-              I live in <span className="text-foamy-green">San Diego</span>.
-            </p>
-            
-            <p className="font-lcd text-gray-300 text-sm md:text-base">
-              Sign in to save your progress and coins!
-            </p>
-          </div>
 
           {/* Divider */}
-          <div className="border-t-4 border-pixel-shadow my-4" />
+          <div className="border-t-4 border-pixel-shadow my-3 md:my-4" />
 
-          {/* Login Form */}
-          <form onSubmit={handleAuth} className="space-y-4">
+          {/* Login Form - compact on mobile */}
+          <form onSubmit={handleAuth} className="space-y-3 md:space-y-4">
             {/* Username Input */}
             <div>
-              <label className="block font-lcd text-gray-300 mb-2 text-sm">
+              <label className="block font-lcd text-gray-300 mb-1 md:mb-2 text-xs md:text-sm">
                 USERNAME
               </label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="enter username..."
-                className="w-full px-4 py-3 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd text-lg focus:border-foamy-green focus:outline-none placeholder:text-gray-500 transition-colors"
+                placeholder="pick a username..."
+                className="w-full px-3 py-2 md:px-4 md:py-3 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd text-base md:text-lg focus:border-foamy-green focus:outline-none placeholder:text-gray-500 transition-colors"
                 required
                 minLength={3}
                 maxLength={20}
@@ -256,7 +252,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
             {/* Display Name (signup only) */}
             {authMode === 'signup' && (
               <div>
-                <label className="block font-lcd text-gray-300 mb-2 text-sm">
+                <label className="block font-lcd text-gray-300 mb-1 md:mb-2 text-xs md:text-sm">
                   DISPLAY NAME <span className="text-gray-500">(optional)</span>
                 </label>
                 <input
@@ -264,7 +260,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="your character name..."
-                  className="w-full px-4 py-3 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd text-lg focus:border-foamy-green focus:outline-none placeholder:text-gray-500 transition-colors"
+                  className="w-full px-3 py-2 md:px-4 md:py-3 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd text-base md:text-lg focus:border-foamy-green focus:outline-none placeholder:text-gray-500 transition-colors"
                   maxLength={30}
                 />
               </div>
@@ -272,7 +268,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
 
             {/* Password Input */}
             <div>
-              <label className="block font-lcd text-gray-300 mb-2 text-sm">
+              <label className="block font-lcd text-gray-300 mb-1 md:mb-2 text-xs md:text-sm">
                 PASSWORD
               </label>
               <input
@@ -280,7 +276,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd text-lg focus:border-foamy-green focus:outline-none placeholder:text-gray-500 transition-colors"
+                className="w-full px-3 py-2 md:px-4 md:py-3 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd text-base md:text-lg focus:border-foamy-green focus:outline-none placeholder:text-gray-500 transition-colors"
                 required
                 minLength={4}
                 autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
@@ -318,35 +314,36 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
             </button>
 
             {/* Mode Switch */}
-            <div className="text-center pt-2">
+            <div className="text-center pt-1 md:pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
                   setError(null);
                 }}
-                className="font-lcd text-gray-400 hover:text-foamy-green transition-colors text-sm"
+                className="font-lcd text-gray-400 hover:text-foamy-green transition-colors text-xs md:text-sm"
               >
                 {authMode === 'signin' ? (
-                  <>New player? <span className="text-foamy-green">Create account</span></>
+                  <>New here? <span className="text-foamy-green">Create account in seconds!</span></>
                 ) : (
-                  <>Already playing? <span className="text-ocean-blue">Sign in</span></>
+                  <>Already have an account? <span className="text-ocean-blue">Sign in</span></>
                 )}
               </button>
             </div>
           </form>
 
           {/* Divider */}
-          <div className="border-t-2 border-pixel-shadow my-4" />
+          <div className="border-t-2 border-pixel-shadow my-3 md:my-4" />
 
           {/* Skip Button */}
           <button
             type="button"
             onClick={handleSkip}
-            className="w-full py-2 px-4 font-lcd text-gray-500 hover:text-gray-300 transition-colors text-sm"
+            className="w-full py-2 px-4 font-lcd text-gray-500 hover:text-gray-300 transition-colors text-xs md:text-sm"
           >
             Continue without signing in →
           </button>
+        </div>
         </div>
       </div>
     );
