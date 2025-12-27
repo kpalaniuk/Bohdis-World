@@ -1034,7 +1034,7 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
     touchX,
     mouseX,
     isJumping,
-    handleJump,
+    soundEnabled,
   ]);
 
   // Handle retry on game over
