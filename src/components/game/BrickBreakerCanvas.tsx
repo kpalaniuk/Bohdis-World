@@ -135,6 +135,23 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
   const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [paddleSpeed, setPaddleSpeed] = useState(1.0); // Multiplier for paddle speed
+  const [isMobile, setIsMobile] = useState(false);
+  const [touchControls, setTouchControls] = useState({ left: false, right: false });
+  
+  // Detect mobile device - improved iPad detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const ua = navigator.userAgent.toLowerCase();
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isMobileUA = /iphone|ipad|ipod|android|webos|blackberry|iemobile|opera mini/i.test(ua);
+      const isSmallScreen = window.innerWidth < 768;
+      const isIPad = (ua.includes('mac') && isTouchDevice) || ua.includes('ipad');
+      setIsMobile(isMobileUA || isIPad || isSmallScreen || isTouchDevice);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   const paddleRef = useRef<Paddle>({
     x: CANVAS_WIDTH / 2 - PADDLE_WIDTH / 2,
@@ -340,10 +357,10 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
         const paddle = paddleRef.current;
         const basePaddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 7 * (gameSettings.brickBreaker.paddleSpeed as number) : 7;
         const adjustedPaddleSpeed = basePaddleSpeed * paddleSpeed;
-        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
+        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA') || touchControls.left) {
           paddle.x = Math.max(0, paddle.x - adjustedPaddleSpeed);
         }
-        if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
+        if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD') || touchControls.right) {
           paddle.x = Math.min(CANVAS_WIDTH - paddle.width, paddle.x + adjustedPaddleSpeed);
         }
         
@@ -617,13 +634,13 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
       
       // Draw overlays
       if (gameState === 'ready') {
-        drawOverlay(ctx, 'BRICK BREAKER', 'Press SPACE to Start');
+        drawOverlay(ctx, 'BRICK BREAKER', isMobile ? 'Tap Screen to Start' : 'Press SPACE to Start');
       } else if (gameState === 'paused') {
         drawOverlay(ctx, 'PAUSED', 'Press P to Continue');
       } else if (gameState === 'levelComplete') {
         drawOverlay(ctx, `LEVEL ${currentLevel} COMPLETE!`, currentLevel < 10 ? 'Next level...' : 'CONGRATULATIONS!');
       } else if (gameState === 'gameover') {
-        drawOverlay(ctx, 'GAME OVER', `Final Score: ${score} - Press R to Restart`);
+        drawOverlay(ctx, 'GAME OVER', `Final Score: ${score}${isMobile ? ' - Tap to Restart' : ' - Press R to Restart'}`);
       }
       
       gameLoopRef.current = requestAnimationFrame(gameLoop);
@@ -654,6 +671,26 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showSettings, gameState]);
   
+  // Handle canvas tap for game over retry
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (gameState === 'gameover') {
+      resetGame();
+    } else if (gameState === 'ready') {
+      startGame();
+    }
+  }, [gameState, resetGame, startGame]);
+
+  // Handle touch for game over retry
+  const handleCanvasTouch = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (gameState === 'gameover') {
+      e.preventDefault();
+      resetGame();
+    } else if (gameState === 'ready') {
+      e.preventDefault();
+      startGame();
+    }
+  }, [gameState, resetGame, startGame]);
+
   return (
     <div className="relative inline-block">
       <canvas
@@ -665,12 +702,88 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
           boxShadow: '8px 8px 0px #2d2d2d',
           touchAction: 'none',
         }}
+        onClick={handleCanvasClick}
+        onTouchStart={handleCanvasTouch}
       />
+      
+      {/* Mobile On-Screen Controls */}
+      {isMobile && gameState === 'playing' && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 pointer-events-none">
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, left: true }));
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, left: false }));
+            }}
+            onMouseDown={() => setTouchControls(prev => ({ ...prev, left: true }))}
+            onMouseUp={() => setTouchControls(prev => ({ ...prev, left: false }))}
+            onMouseLeave={() => setTouchControls(prev => ({ ...prev, left: false }))}
+            className="pointer-events-auto w-16 h-16 bg-pixel-black/80 border-4 border-ocean-blue text-white font-pixel text-xl flex items-center justify-center active:bg-ocean-blue"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            ←
+          </button>
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, right: true }));
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, right: false }));
+            }}
+            onMouseDown={() => setTouchControls(prev => ({ ...prev, right: true }))}
+            onMouseUp={() => setTouchControls(prev => ({ ...prev, right: false }))}
+            onMouseLeave={() => setTouchControls(prev => ({ ...prev, right: false }))}
+            className="pointer-events-auto w-16 h-16 bg-pixel-black/80 border-4 border-ocean-blue text-white font-pixel text-xl flex items-center justify-center active:bg-ocean-blue"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            →
+          </button>
+        </div>
+      )}
+      
+      {/* Retry Button Overlay (Game Over) */}
+      {gameState === 'gameover' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <button
+            onClick={resetGame}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              resetGame();
+            }}
+            className="pointer-events-auto px-8 py-4 bg-foamy-green border-4 border-pixel-black text-pixel-black font-pixel text-lg hover:bg-yellow-300 active:bg-yellow-400 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO RETRY
+          </button>
+        </div>
+      )}
+      
+      {/* Start Button Overlay (Ready State) */}
+      {isMobile && gameState === 'ready' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={startGame}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              startGame();
+            }}
+            className="pointer-events-auto px-8 py-4 bg-foamy-green border-4 border-pixel-black text-pixel-black font-pixel text-lg hover:bg-yellow-300 active:bg-yellow-400 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO START
+          </button>
+        </div>
+      )}
       
       {/* Settings Overlay */}
       {showSettings && (gameState === 'paused' || gameState === 'playing') && (
         <div 
-          className="absolute inset-0 bg-black/95 flex items-center justify-center"
+          className="absolute inset-0 bg-black/95 flex items-center justify-center z-10"
           style={{ fontFamily: '"Press Start 2P", monospace' }}
         >
           <div className="text-center space-y-6">

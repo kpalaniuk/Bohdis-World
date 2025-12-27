@@ -44,6 +44,9 @@ export function WordProblemCreator({ onClose }: WordProblemCreatorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [savedProblems, setSavedProblems] = useState<any[]>([]);
+  const [userAnswer, setUserAnswer] = useState<string>('');
+  const [showAnswerResult, setShowAnswerResult] = useState<boolean>(false);
+  const [isCorrect, setIsCorrect] = useState<boolean>(false);
 
   // Load available templates for selected level
   const availableTemplates = useMemo(() => {
@@ -390,6 +393,58 @@ export function WordProblemCreator({ onClose }: WordProblemCreatorProps) {
               <p className="font-lcd text-white text-lg leading-relaxed">
                 {wordProblem.question}
               </p>
+            </div>
+
+            {/* Answer Section */}
+            <div className="border-t-4 border-pixel-shadow pt-4 space-y-3">
+              <h3 className="font-pixel text-ocean-blue text-xs mb-2">TRY TO SOLVE IT:</h3>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={userAnswer}
+                  onChange={(e) => {
+                    setUserAnswer(e.target.value);
+                    setShowAnswerResult(false);
+                  }}
+                  placeholder="Enter your answer"
+                  className="flex-1 px-3 py-2 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd focus:border-foamy-green outline-none"
+                />
+                <PixelButton
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    const answer = parseFloat(userAnswer);
+                    const correct = wordProblem.answer;
+                    const correctNum = typeof correct === 'string' ? parseFloat(correct) : correct;
+                    const isAnswerCorrect = !isNaN(answer) && Math.abs(answer - correctNum) < 0.01;
+                    setIsCorrect(isAnswerCorrect);
+                    setShowAnswerResult(true);
+                  }}
+                  disabled={!userAnswer || showAnswerResult}
+                >
+                  CHECK
+                </PixelButton>
+              </div>
+              
+              {showAnswerResult && (
+                <div className={`p-3 border-4 font-lcd text-sm ${
+                  isCorrect 
+                    ? 'bg-green-900/50 border-foamy-green text-foamy-green' 
+                    : 'bg-red-900/50 border-red-500 text-red-300'
+                }`}>
+                  {isCorrect ? (
+                    <div className="flex items-center gap-2">
+                      <Check size={16} />
+                      <span>Correct! The answer is {wordProblem.answer}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <X size={16} />
+                      <span>Not quite. The correct answer is {wordProblem.answer}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="border-t-4 border-pixel-shadow pt-4">

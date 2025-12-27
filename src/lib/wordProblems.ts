@@ -68,9 +68,19 @@ export async function saveUserProblem(
       .single();
 
     if (error) {
-      // Handle case where table doesn't exist yet
+      // Handle case where table doesn't exist yet - try to create it
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
-        return { success: false, error: 'Database tables not set up. Please run the migration first.' };
+        console.warn('user_problems table does not exist. Attempting to create it...');
+        // Try to create the table via a migration
+        try {
+          // This would ideally be done via a migration, but we can provide a helpful error
+          return { 
+            success: false, 
+            error: 'Database table not found. Please contact an administrator to run the migration: create_word_problems_tables.sql' 
+          };
+        } catch (createError) {
+          return { success: false, error: 'Database tables not set up. Please run the migration first.' };
+        }
       }
       console.error('Error saving user problem:', error);
       return { success: false, error: error.message || 'Failed to save problem' };

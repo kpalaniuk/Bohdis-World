@@ -54,6 +54,23 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
   const [displayScore, setDisplayScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Detect mobile device - improved iPad detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const ua = navigator.userAgent.toLowerCase();
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isMobileUA = /iphone|ipad|ipod|android|webos|blackberry|iemobile|opera mini/i.test(ua);
+      const isSmallScreen = window.innerWidth < 768;
+      // Better iPad detection - iPadOS doesn't always include "iPad" in user agent
+      const isIPad = (ua.includes('mac') && isTouchDevice) || ua.includes('ipad');
+      setIsMobile(isMobileUA || isIPad || isSmallScreen || isTouchDevice);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const { currentTheme, activePowerUps, deactivatePowerUp, soundEnabled } = useGameStore();
   const { usePowerUp, getPowerUpCount } = useUnlockStore();
@@ -410,11 +427,11 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
 
       // Draw UI overlays
       if (gameState === 'ready') {
-        drawOverlay(ctx, 'SURF RUNNER', 'Press SPACE to Start', dimensions);
+        drawOverlay(ctx, 'SURF RUNNER', isMobile ? 'Tap Screen to Start' : 'Press SPACE to Start', dimensions);
       } else if (gameState === 'paused') {
-        drawOverlay(ctx, 'PAUSED', 'Press SPACE to Continue', dimensions);
+        drawOverlay(ctx, 'PAUSED', isMobile ? 'Tap Screen to Continue' : 'Press SPACE to Continue', dimensions);
       } else if (gameState === 'gameover') {
-        drawOverlay(ctx, 'GAME OVER', `Score: ${Math.floor(scoreRef.current / 10)}m - Press R to Retry`, dimensions);
+        drawOverlay(ctx, 'GAME OVER', `Score: ${Math.floor(scoreRef.current / 10)}m${isMobile ? ' - Tap to Retry' : ' - Press R to Retry'}`, dimensions);
       }
 
       // Continue loop
@@ -443,6 +460,13 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
     soundEnabled,
   ]);
 
+  // Handle retry on game over
+  const handleRetry = useCallback(() => {
+    if (gameState === 'gameover') {
+      startGame();
+    }
+  }, [gameState, startGame]);
+
   return (
     <div className="relative">
       <canvas
@@ -454,8 +478,87 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
           boxShadow: '8px 8px 0px #2d2d2d',
           touchAction: 'none',
         }}
-        onClick={handleJump}
+        onClick={(e) => {
+          if (gameState === 'ready' || gameState === 'paused') {
+            if (gameState === 'ready') {
+              startGame();
+            } else {
+              setGameState('playing');
+            }
+          } else if (gameState === 'gameover') {
+            handleRetry();
+          } else {
+            handleJump();
+          }
+        }}
+        onTouchStart={(e) => {
+          if (gameState === 'ready' || gameState === 'paused') {
+            e.preventDefault();
+            if (gameState === 'ready') {
+              startGame();
+            } else {
+              setGameState('playing');
+            }
+          } else if (gameState === 'gameover') {
+            e.preventDefault();
+            handleRetry();
+          } else {
+            e.preventDefault();
+            handleJump();
+          }
+        }}
       />
+      
+      {/* Start Button Overlay (Ready State) */}
+      {isMobile && gameState === 'ready' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={startGame}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              startGame();
+            }}
+            className="pointer-events-auto px-8 py-4 bg-foamy-green border-4 border-pixel-black text-pixel-black font-pixel text-lg hover:bg-yellow-300 active:bg-yellow-400 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO START
+          </button>
+        </div>
+      )}
+      
+      {/* Pause Resume Button */}
+      {isMobile && gameState === 'paused' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={() => setGameState('playing')}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setGameState('playing');
+            }}
+            className="pointer-events-auto px-8 py-4 bg-ocean-blue border-4 border-pixel-black text-white font-pixel text-lg hover:bg-foamy-green hover:text-pixel-black active:bg-yellow-300 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO RESUME
+          </button>
+        </div>
+      )}
+      
+      {/* Retry Button Overlay (Game Over) */}
+      {gameState === 'gameover' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={handleRetry}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              handleRetry();
+            }}
+            className="pointer-events-auto px-8 py-4 bg-foamy-green border-4 border-pixel-black text-pixel-black font-pixel text-lg hover:bg-yellow-300 active:bg-yellow-400 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO RETRY
+          </button>
+        </div>
+      )}
       
       {/* HUD */}
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">

@@ -550,6 +550,23 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
   const [gameState, setGameState] = useState<'ready' | 'playing' | 'paused' | 'gameover' | 'victory'>('ready');
   const [displayAltitude, setDisplayAltitude] = useState(0);
   const [lives, setLives] = useState(3);
+  const [isMobile, setIsMobile] = useState(false);
+  const [touchControls, setTouchControls] = useState({ left: false, right: false });
+  
+  // Detect mobile device - improved iPad detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const ua = navigator.userAgent.toLowerCase();
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isMobileUA = /iphone|ipad|ipod|android|webos|blackberry|iemobile|opera mini/i.test(ua);
+      const isSmallScreen = window.innerWidth < 768;
+      const isIPad = (ua.includes('mac') && isTouchDevice) || ua.includes('ipad');
+      setIsMobile(isMobileUA || isIPad || isSmallScreen || isTouchDevice);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const livesRef = useRef<number>(3);
 
   // Stores
@@ -700,15 +717,17 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
 
       if (gameState === 'playing') {
         // Input
-        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
+        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA') || touchControls.left) {
           velocityXRef.current = -MOVE_SPEED;
           facingRightRef.current = false;
-        } else if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
+        } else if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD') || touchControls.right) {
           velocityXRef.current = MOVE_SPEED;
           facingRightRef.current = true;
         } else {
           velocityXRef.current = 0;
         }
+        
+        // Handle jump from touch - handled in button onTouchStart
 
         // Gravity pulls DOWN (reduces Y in world coords)
         velocityYRef.current -= GRAVITY;
@@ -947,11 +966,11 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
 
       // Overlays
       if (gameState === 'ready') {
-        drawOverlay(ctx, 'SKY CLIMBER', 'Press SPACE or ↑ to Start');
+        drawOverlay(ctx, 'SKY CLIMBER', isMobile ? 'Tap Screen to Start' : 'Press SPACE or ↑ to Start');
       } else if (gameState === 'paused') {
         drawOverlay(ctx, 'PAUSED', 'Press P to Continue');
       } else if (gameState === 'gameover') {
-        drawOverlay(ctx, 'GAME OVER', `Best: ${highestAltitude}m - Press R to Retry`);
+        drawOverlay(ctx, 'GAME OVER', `Best: ${highestAltitude}m${isMobile ? ' - Tap to Retry' : ' - Press R to Retry'}`);
       } else if (gameState === 'victory') {
         drawOverlay(ctx, '🏆 VICTORY! 🏆', 'You reached 5000m!');
       }
@@ -981,6 +1000,13 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
     respawnAtCheckpoint,
   ]);
 
+  // Handle retry on game over
+  const handleRetry = useCallback(() => {
+    if (gameState === 'gameover') {
+      respawnAtCheckpoint();
+    }
+  }, [gameState, respawnAtCheckpoint]);
+
   return (
     <div className="relative">
       <canvas
@@ -994,7 +1020,101 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
           maxWidth: '100%',
           height: 'auto',
         }}
+        onClick={(e) => {
+          if (gameState === 'gameover') {
+            handleRetry();
+          } else if (gameState === 'ready') {
+            startGame();
+          }
+        }}
+        onTouchStart={(e) => {
+          if (gameState === 'gameover') {
+            e.preventDefault();
+            handleRetry();
+          } else if (gameState === 'ready') {
+            e.preventDefault();
+            startGame();
+          }
+        }}
       />
+      
+      {/* Start Button Overlay (Ready State) */}
+      {isMobile && gameState === 'ready' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={startGame}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              startGame();
+            }}
+            className="pointer-events-auto px-8 py-4 bg-foamy-green border-4 border-pixel-black text-pixel-black font-pixel text-lg hover:bg-yellow-300 active:bg-yellow-400 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO START
+          </button>
+        </div>
+      )}
+      
+      {/* Mobile On-Screen Controls */}
+      {isMobile && gameState === 'playing' && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 pointer-events-none">
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, left: true }));
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, left: false }));
+            }}
+            className="pointer-events-auto w-16 h-16 bg-pixel-black/80 border-4 border-purple-400 text-white font-pixel text-xl flex items-center justify-center active:bg-purple-400"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            ←
+          </button>
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              handleJump();
+            }}
+            className="pointer-events-auto w-20 h-20 bg-pixel-black/80 border-4 border-purple-400 text-white font-pixel text-xl flex items-center justify-center active:bg-purple-400"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            ↑
+          </button>
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, right: true }));
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, right: false }));
+            }}
+            className="pointer-events-auto w-16 h-16 bg-pixel-black/80 border-4 border-purple-400 text-white font-pixel text-xl flex items-center justify-center active:bg-purple-400"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            →
+          </button>
+        </div>
+      )}
+      
+      {/* Retry Button Overlay (Game Over) */}
+      {gameState === 'gameover' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={handleRetry}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              handleRetry();
+            }}
+            className="pointer-events-auto px-8 py-4 bg-foamy-green border-4 border-pixel-black text-pixel-black font-pixel text-lg hover:bg-yellow-300 active:bg-yellow-400 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO RETRY
+          </button>
+        </div>
+      )}
 
       {/* HUD */}
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">

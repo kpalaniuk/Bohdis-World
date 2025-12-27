@@ -159,6 +159,28 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
   const { user } = useAuth();
   const [gameSettings, setGameSettings] = useState<GameSettingsConfig | null>(null);
   const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
+  const [isMobile, setIsMobile] = useState(false);
+  const [touchControls, setTouchControls] = useState({ 
+    rotateLeft: false, 
+    rotateRight: false, 
+    thrust: false, 
+    shoot: false 
+  });
+  
+  // Detect mobile device - improved iPad detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const ua = navigator.userAgent.toLowerCase();
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isMobileUA = /iphone|ipad|ipod|android|webos|blackberry|iemobile|opera mini/i.test(ua);
+      const isSmallScreen = window.innerWidth < 768;
+      const isIPad = (ua.includes('mac') && isTouchDevice) || ua.includes('ipad');
+      setIsMobile(isMobileUA || isIPad || isSmallScreen || isTouchDevice);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Load game settings
   useEffect(() => {
@@ -213,6 +235,25 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
     setGameState('playing');
   }, []);
   
+  // Shoot bullet function
+  const shootBullet = useCallback(() => {
+    if (bulletsRef.current.length < MAX_BULLETS && gameState === 'playing') {
+      const ship = shipRef.current;
+      let bulletSpeed = BASE_BULLET_SPEED + (currentLevel - 1) * 0.3;
+      if (gameSettings?.asteroids?.bulletSpeed) {
+        bulletSpeed *= gameSettings.asteroids.bulletSpeed as number;
+      }
+      bulletsRef.current.push({
+        x: ship.x + Math.cos(ship.rotation) * SHIP_SIZE,
+        y: ship.y + Math.sin(ship.rotation) * SHIP_SIZE,
+        velocityX: Math.cos(ship.rotation) * bulletSpeed,
+        velocityY: Math.sin(ship.rotation) * bulletSpeed,
+        life: BULLET_LIFE,
+      });
+      if (soundEnabled) playSound('jump');
+    }
+  }, [gameState, currentLevel, gameSettings, soundEnabled]);
+  
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -231,22 +272,7 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
         else if (gameState === 'paused') setGameState('playing');
       } else if (e.code === 'Space' && gameState === 'playing') {
         // Shoot bullet
-        if (bulletsRef.current.length < MAX_BULLETS) {
-          const ship = shipRef.current;
-          // Level-based bullet speed with custom multiplier
-          let bulletSpeed = BASE_BULLET_SPEED + (currentLevel - 1) * 0.3;
-          if (gameSettings?.asteroids?.bulletSpeed) {
-            bulletSpeed *= gameSettings.asteroids.bulletSpeed as number;
-          }
-          bulletsRef.current.push({
-            x: ship.x + Math.cos(ship.rotation) * SHIP_SIZE,
-            y: ship.y + Math.sin(ship.rotation) * SHIP_SIZE,
-            velocityX: Math.cos(ship.rotation) * bulletSpeed,
-            velocityY: Math.sin(ship.rotation) * bulletSpeed,
-            life: BULLET_LIFE,
-          });
-          if (soundEnabled) playSound('jump');
-        }
+        shootBullet();
       }
     };
     
@@ -289,15 +315,15 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
         const ship = shipRef.current;
         
         // Rotate ship
-        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
+        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA') || touchControls.rotateLeft) {
           ship.rotation -= ROTATION_SPEED;
         }
-        if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
+        if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD') || touchControls.rotateRight) {
           ship.rotation += ROTATION_SPEED;
         }
         
         // Thrust - level-based speed with custom multiplier
-        ship.thrusting = keysRef.current.has('ArrowUp') || keysRef.current.has('KeyW');
+        ship.thrusting = keysRef.current.has('ArrowUp') || keysRef.current.has('KeyW') || touchControls.thrust;
         if (ship.thrusting) {
           let shipSpeed = BASE_SHIP_SPEED + (currentLevel - 1) * 0.01;
           if (gameSettings?.asteroids?.shipSpeed) {
@@ -583,13 +609,13 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
       
       // Draw overlays
       if (gameState === 'ready') {
-        drawOverlay(ctx, 'ASTEROIDS', 'Press SPACE to Start');
+        drawOverlay(ctx, 'ASTEROIDS', isMobile ? 'Tap Screen to Start' : 'Press SPACE to Start');
       } else if (gameState === 'paused') {
         drawOverlay(ctx, 'PAUSED', 'Press P to Continue');
       } else if (gameState === 'levelComplete') {
         drawOverlay(ctx, `LEVEL ${currentLevel} COMPLETE!`, currentLevel < 10 ? 'Next level...' : 'CONGRATULATIONS!');
       } else if (gameState === 'gameover') {
-        drawOverlay(ctx, 'GAME OVER', `Final Score: ${score} | Press R to Restart`);
+        drawOverlay(ctx, 'GAME OVER', `Final Score: ${score}${isMobile ? ' - Tap to Restart' : ' | Press R to Restart'}`);
       }
       
       gameLoopRef.current = requestAnimationFrame(gameLoop);
@@ -604,17 +630,134 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
     };
   }, [gameState, currentLevel, score, lives, soundEnabled, addCoins, onGameOver, resetGame]);
   
+  // Handle retry on game over
+  const handleRetry = useCallback(() => {
+    if (gameState === 'gameover') {
+      resetGame();
+    }
+  }, [gameState, resetGame]);
+
   return (
-    <canvas
-      ref={canvasRef}
-      width={CANVAS_WIDTH}
-      height={CANVAS_HEIGHT}
-      className="border-4 border-pixel-black cursor-pointer"
-      style={{ 
-        boxShadow: '8px 8px 0px #2d2d2d',
-        touchAction: 'none',
-      }}
-    />
+    <div className="relative inline-block">
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        className="border-4 border-pixel-black cursor-pointer"
+        style={{ 
+          boxShadow: '8px 8px 0px #2d2d2d',
+          touchAction: 'none',
+        }}
+        onClick={(e) => {
+          if (gameState === 'gameover') {
+            handleRetry();
+          } else if (gameState === 'ready') {
+            startGame();
+          }
+        }}
+        onTouchStart={(e) => {
+          if (gameState === 'gameover') {
+            e.preventDefault();
+            handleRetry();
+          } else if (gameState === 'ready') {
+            e.preventDefault();
+            startGame();
+          }
+        }}
+      />
+      
+      {/* Start Button Overlay (Ready State) */}
+      {isMobile && gameState === 'ready' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={startGame}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              startGame();
+            }}
+            className="pointer-events-auto px-8 py-4 bg-foamy-green border-4 border-pixel-black text-pixel-black font-pixel text-lg hover:bg-yellow-300 active:bg-yellow-400 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO START
+          </button>
+        </div>
+      )}
+      
+      {/* Mobile On-Screen Controls */}
+      {isMobile && gameState === 'playing' && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 pointer-events-none">
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, rotateLeft: true }));
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, rotateLeft: false }));
+            }}
+            className="pointer-events-auto w-14 h-14 bg-pixel-black/80 border-4 border-cyan-400 text-white font-pixel text-lg flex items-center justify-center active:bg-cyan-400"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            ↶
+          </button>
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, thrust: true }));
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, thrust: false }));
+            }}
+            className="pointer-events-auto w-14 h-14 bg-pixel-black/80 border-4 border-cyan-400 text-white font-pixel text-lg flex items-center justify-center active:bg-cyan-400"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            ↑
+          </button>
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              shootBullet();
+            }}
+            className="pointer-events-auto w-14 h-14 bg-pixel-black/80 border-4 border-yellow-400 text-white font-pixel text-lg flex items-center justify-center active:bg-yellow-400"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            ⚡
+          </button>
+          <button
+            onTouchStart={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, rotateRight: true }));
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setTouchControls(prev => ({ ...prev, rotateRight: false }));
+            }}
+            className="pointer-events-auto w-14 h-14 bg-pixel-black/80 border-4 border-cyan-400 text-white font-pixel text-lg flex items-center justify-center active:bg-cyan-400"
+            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
+          >
+            ↷
+          </button>
+        </div>
+      )}
+      
+      {/* Retry Button Overlay (Game Over) */}
+      {gameState === 'gameover' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={handleRetry}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              handleRetry();
+            }}
+            className="pointer-events-auto px-8 py-4 bg-foamy-green border-4 border-pixel-black text-pixel-black font-pixel text-lg hover:bg-yellow-300 active:bg-yellow-400 transition-colors"
+            style={{ boxShadow: '6px 6px 0px #2d2d2d' }}
+          >
+            TAP TO RETRY
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

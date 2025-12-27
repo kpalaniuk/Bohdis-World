@@ -60,11 +60,15 @@ export function GameInstructions({ isOpen, onClose }: GameInstructionsProps) {
               </div>
               <div className="flex items-start gap-3">
                 <span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs whitespace-nowrap">R</span>
-                <span>Retry after game over</span>
+                <span>Retry after game over (desktop)</span>
               </div>
               <div className="flex items-start gap-3">
                 <MousePointer className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <span>Click or tap the screen to jump (mobile)</span>
+                <span>Click or tap the screen to jump</span>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="bg-foamy-green px-3 py-1 border border-gray-600 font-pixel text-xs whitespace-nowrap">📱</span>
+                <span><strong className="text-foamy-green">Mobile/iPad:</strong> Tap "TAP TO RETRY" button when game over</span>
               </div>
             </div>
           </section>
