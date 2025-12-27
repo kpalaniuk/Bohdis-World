@@ -23,8 +23,8 @@ interface GameCanvasProps {
 }
 
 const GRAVITY = 0.8;
-const JUMP_FORCE = -16;
-const DOUBLE_JUMP_FORCE = -13;
+const JUMP_FORCE = -12; // Reduced from -16 for better control
+const DOUBLE_JUMP_FORCE = -10; // Reduced from -13
 const GAME_SPEED_INITIAL = 6;
 const GAME_SPEED_MAX = 14;
 const GROUND_Y_OFFSET = 100;
@@ -55,6 +55,9 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
   const [lives, setLives] = useState(3);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
   const [isMobile, setIsMobile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [jumpHeight, setJumpHeight] = useState(1.0); // Multiplier for jump height (0.5 to 2.0)
+  const [doubleJumpEnabled, setDoubleJumpEnabled] = useState(true); // Whether double jump is enabled
   
   // Detect mobile device - improved iPad detection
   useEffect(() => {
@@ -151,7 +154,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
     }
   }, [getPowerUpCount, usePowerUp, deactivatePowerUp]);
 
-  // Jump handler
+  // Jump handler - only double jump when explicitly pressed again
   const handleJump = useCallback(() => {
     if (gameState === 'ready') {
       startGame();
@@ -162,24 +165,26 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
 
     const groundY = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
     const isOnGround = surferYRef.current >= groundY - 5;
-    const hasDoubleJump = activePowerUps.includes('double-jump');
+    const hasDoubleJumpPowerUp = activePowerUps.includes('double-jump');
 
-    // Apply character jump strength modifier
-    const jumpMultiplier = strengths?.jumpHeight || 1;
+    // Apply character jump strength modifier and user settings
+    const jumpMultiplier = (strengths?.jumpHeight || 1) * jumpHeight;
     const adjustedJumpForce = JUMP_FORCE * jumpMultiplier;
-    const adjustedDoubleJumpForce = DOUBLE_JUMP_FORCE * (strengths?.doubleJump || 1);
+    const adjustedDoubleJumpForce = DOUBLE_JUMP_FORCE * jumpMultiplier;
 
     if (isOnGround) {
+      // Regular jump from ground
       velocityYRef.current = adjustedJumpForce;
       isJumpingRef.current = true;
       hasDoubleJumpedRef.current = false;
       if (soundEnabled) playSound('jump');
-    } else if (hasDoubleJump && !hasDoubleJumpedRef.current) {
+    } else if (doubleJumpEnabled && hasDoubleJumpPowerUp && !hasDoubleJumpedRef.current) {
+      // Double jump - only if enabled and power-up is active and not already used
       velocityYRef.current = adjustedDoubleJumpForce;
       hasDoubleJumpedRef.current = true;
       if (soundEnabled) playSound('doubleJump');
     }
-  }, [gameState, dimensions.height, activePowerUps, startGame, strengths, soundEnabled]);
+  }, [gameState, dimensions.height, activePowerUps, startGame, strengths, soundEnabled, jumpHeight, doubleJumpEnabled]);
 
   // Keyboard controls
   useEffect(() => {
@@ -191,12 +196,24 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
         togglePause();
       } else if (e.code === 'KeyR' && gameState === 'gameover') {
         startGame();
+      } else if (e.code === 'KeyS' && (gameState === 'playing' || gameState === 'paused')) {
+        if (showSettings) {
+          setShowSettings(false);
+          if (gameState === 'paused') {
+            setGameState('playing');
+          }
+        } else {
+          setShowSettings(true);
+          if (gameState === 'playing') {
+            setGameState('paused');
+          }
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleJump, togglePause, gameState, startGame]);
+  }, [handleJump, togglePause, gameState, startGame, showSettings]);
 
   // Touch controls
   useEffect(() => {
@@ -599,6 +616,61 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
               {powerUp === 'slow-mo' && '⏱️ SLOW-MO'}
             </div>
           ))}
+        </div>
+      )}
+      
+      {/* Settings Overlay */}
+      {showSettings && (gameState === 'paused' || gameState === 'playing') && (
+        <div 
+          className="absolute inset-0 bg-black/95 flex items-center justify-center z-20"
+          style={{ fontFamily: '"Press Start 2P", monospace' }}
+        >
+          <div className="text-center space-y-6">
+            <h2 className="text-foamy-green text-xl mb-6">GAME SETTINGS</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="text-white text-sm mb-2">Jump Height: {(jumpHeight * 100).toFixed(0)}%</p>
+                <div className="w-80 h-6 bg-pixel-black border-2 border-white mx-auto relative">
+                  <div 
+                    className="h-full bg-ocean-blue transition-all"
+                    style={{ width: `${((jumpHeight - 0.5) / 1.5) * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-center gap-2 mt-2">
+                  <button
+                    onClick={() => setJumpHeight(prev => Math.max(0.5, prev - 0.1))}
+                    className="px-3 py-1 bg-pixel-shadow border-2 border-white text-white font-pixel text-xs hover:bg-ocean-blue"
+                  >
+                    -
+                  </button>
+                  <button
+                    onClick={() => setJumpHeight(prev => Math.min(2.0, prev + 0.1))}
+                    className="px-3 py-1 bg-pixel-shadow border-2 border-white text-white font-pixel text-xs hover:bg-ocean-blue"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <label className="flex items-center justify-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={doubleJumpEnabled}
+                    onChange={(e) => setDoubleJumpEnabled(e.target.checked)}
+                    className="w-5 h-5"
+                  />
+                  <span className="text-white text-sm">Enable Double Jump</span>
+                </label>
+                <p className="text-gray-400 text-xs mt-1">Double jump only works when you have the power-up</p>
+              </div>
+              
+              <div className="space-y-2 text-xs text-gray-300">
+                <p>Press S to close settings</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

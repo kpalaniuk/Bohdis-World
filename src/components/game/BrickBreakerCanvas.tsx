@@ -136,7 +136,8 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
   const [showSettings, setShowSettings] = useState(false);
   const [paddleSpeed, setPaddleSpeed] = useState(1.0); // Multiplier for paddle speed
   const [isMobile, setIsMobile] = useState(false);
-  const [touchControls, setTouchControls] = useState({ left: false, right: false });
+  const [mouseX, setMouseX] = useState<number | null>(null);
+  const [touchX, setTouchX] = useState<number | null>(null);
   
   // Detect mobile device - improved iPad detection
   useEffect(() => {
@@ -353,15 +354,33 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
       }
       
       if (gameState === 'playing') {
-        // Move paddle
+        // Move paddle - use mouse/touch position directly
         const paddle = paddleRef.current;
-        const basePaddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 7 * (gameSettings.brickBreaker.paddleSpeed as number) : 7;
-        const adjustedPaddleSpeed = basePaddleSpeed * paddleSpeed;
-        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA') || touchControls.left) {
-          paddle.x = Math.max(0, paddle.x - adjustedPaddleSpeed);
-        }
-        if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD') || touchControls.right) {
-          paddle.x = Math.min(CANVAS_WIDTH - paddle.width, paddle.x + adjustedPaddleSpeed);
+        const targetX = touchX !== null ? touchX : (mouseX !== null ? mouseX : null);
+        
+        if (targetX !== null) {
+          // Move paddle to mouse/touch position (centered on paddle)
+          const targetPaddleX = Math.max(0, Math.min(CANVAS_WIDTH - paddle.width, targetX - paddle.width / 2));
+          const basePaddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 7 * (gameSettings.brickBreaker.paddleSpeed as number) : 7;
+          const adjustedPaddleSpeed = basePaddleSpeed * paddleSpeed;
+          
+          // Smooth movement towards target
+          const diff = targetPaddleX - paddle.x;
+          if (Math.abs(diff) > 1) {
+            paddle.x += Math.sign(diff) * Math.min(Math.abs(diff), adjustedPaddleSpeed);
+          } else {
+            paddle.x = targetPaddleX;
+          }
+        } else {
+          // Fallback to keyboard controls if no mouse/touch
+          const basePaddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 7 * (gameSettings.brickBreaker.paddleSpeed as number) : 7;
+          const adjustedPaddleSpeed = basePaddleSpeed * paddleSpeed;
+          if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
+            paddle.x = Math.max(0, paddle.x - adjustedPaddleSpeed);
+          }
+          if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
+            paddle.x = Math.min(CANVAS_WIDTH - paddle.width, paddle.x + adjustedPaddleSpeed);
+          }
         }
         
         // Move ball
@@ -671,6 +690,37 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showSettings, gameState]);
   
+  // Handle mouse movement for paddle control
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (gameState === 'playing') {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect) {
+        const x = e.clientX - rect.left;
+        setMouseX(x);
+      }
+    }
+  }, [gameState]);
+
+  const handleMouseLeave = useCallback(() => {
+    setMouseX(null);
+  }, []);
+
+  // Handle touch movement for paddle control
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (gameState === 'playing') {
+      e.preventDefault();
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect && e.touches.length > 0) {
+        const x = e.touches[0].clientX - rect.left;
+        setTouchX(x);
+      }
+    }
+  }, [gameState]);
+
+  const handleTouchEnd = useCallback(() => {
+    setTouchX(null);
+  }, []);
+
   // Handle canvas tap for game over retry
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (gameState === 'gameover') {
@@ -681,7 +731,7 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
   }, [gameState, resetGame, startGame]);
 
   // Handle touch for game over retry
-  const handleCanvasTouch = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+  const handleCanvasTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
     if (gameState === 'gameover') {
       e.preventDefault();
       resetGame();
@@ -703,48 +753,12 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
           touchAction: 'none',
         }}
         onClick={handleCanvasClick}
-        onTouchStart={handleCanvasTouch}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onTouchStart={handleCanvasTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       />
-      
-      {/* Mobile On-Screen Controls */}
-      {isMobile && gameState === 'playing' && (
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 pointer-events-none">
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, left: true }));
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, left: false }));
-            }}
-            onMouseDown={() => setTouchControls(prev => ({ ...prev, left: true }))}
-            onMouseUp={() => setTouchControls(prev => ({ ...prev, left: false }))}
-            onMouseLeave={() => setTouchControls(prev => ({ ...prev, left: false }))}
-            className="pointer-events-auto w-16 h-16 bg-pixel-black/80 border-4 border-ocean-blue text-white font-pixel text-xl flex items-center justify-center active:bg-ocean-blue"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            ←
-          </button>
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, right: true }));
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, right: false }));
-            }}
-            onMouseDown={() => setTouchControls(prev => ({ ...prev, right: true }))}
-            onMouseUp={() => setTouchControls(prev => ({ ...prev, right: false }))}
-            onMouseLeave={() => setTouchControls(prev => ({ ...prev, right: false }))}
-            className="pointer-events-auto w-16 h-16 bg-pixel-black/80 border-4 border-ocean-blue text-white font-pixel text-xl flex items-center justify-center active:bg-ocean-blue"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            →
-          </button>
-        </div>
-      )}
       
       {/* Retry Button Overlay (Game Over) */}
       {gameState === 'gameover' && (
