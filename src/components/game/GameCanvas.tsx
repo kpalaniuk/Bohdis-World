@@ -607,9 +607,20 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
         </div>
       </div>
 
+      {/* Mobile Tap Instructions */}
+      {isMobile && gameState === 'playing' && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none z-10">
+          <div className="bg-pixel-black/80 px-4 py-2 border-2 border-foamy-green">
+            <p className="font-lcd text-foamy-green text-xs text-center">
+              TAP ANYWHERE TO JUMP!
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Active power-ups indicator */}
       {activePowerUps.length > 0 && (
-        <div className="absolute bottom-4 left-4 flex gap-2 pointer-events-none">
+        <div className="absolute bottom-16 left-4 flex gap-2 pointer-events-none">
           {activePowerUps.map((powerUp) => (
             <div
               key={powerUp}

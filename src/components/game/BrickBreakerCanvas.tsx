@@ -354,33 +354,16 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
       }
       
       if (gameState === 'playing') {
-        // Move paddle - use mouse/touch position directly
+        // Move paddle - keyboard controls only (touch/mouse handled in event handlers for instant response)
         const paddle = paddleRef.current;
-        const targetX = touchX !== null ? touchX : (mouseX !== null ? mouseX : null);
+        const basePaddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 10 * (gameSettings.brickBreaker.paddleSpeed as number) : 10;
+        const adjustedPaddleSpeed = basePaddleSpeed * paddleSpeed;
         
-        if (targetX !== null) {
-          // Move paddle to mouse/touch position (centered on paddle)
-          const targetPaddleX = Math.max(0, Math.min(CANVAS_WIDTH - paddle.width, targetX - paddle.width / 2));
-          const basePaddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 7 * (gameSettings.brickBreaker.paddleSpeed as number) : 7;
-          const adjustedPaddleSpeed = basePaddleSpeed * paddleSpeed;
-          
-          // Smooth movement towards target
-          const diff = targetPaddleX - paddle.x;
-          if (Math.abs(diff) > 1) {
-            paddle.x += Math.sign(diff) * Math.min(Math.abs(diff), adjustedPaddleSpeed);
-          } else {
-            paddle.x = targetPaddleX;
-          }
-        } else {
-          // Fallback to keyboard controls if no mouse/touch
-          const basePaddleSpeed = gameSettings?.brickBreaker?.paddleSpeed ? 7 * (gameSettings.brickBreaker.paddleSpeed as number) : 7;
-          const adjustedPaddleSpeed = basePaddleSpeed * paddleSpeed;
-          if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
-            paddle.x = Math.max(0, paddle.x - adjustedPaddleSpeed);
-          }
-          if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
-            paddle.x = Math.min(CANVAS_WIDTH - paddle.width, paddle.x + adjustedPaddleSpeed);
-          }
+        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
+          paddle.x = Math.max(0, paddle.x - adjustedPaddleSpeed);
+        }
+        if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
+          paddle.x = Math.min(CANVAS_WIDTH - paddle.width, paddle.x + adjustedPaddleSpeed);
         }
         
         // Move ball
@@ -690,53 +673,67 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showSettings, gameState]);
   
+  // Get scaled canvas coordinates (canvas is 800x600 but may be displayed smaller)
+  const getScaledX = useCallback((clientX: number): number => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const x = clientX - rect.left;
+    // Scale from display size to canvas size
+    return (x / rect.width) * CANVAS_WIDTH;
+  }, []);
+
   // Handle mouse movement for paddle control
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const scaledX = getScaledX(e.clientX);
+    setMouseX(scaledX);
+    // Immediately move paddle during play
     if (gameState === 'playing') {
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (rect) {
-        const x = e.clientX - rect.left;
-        setMouseX(x);
-      }
+      paddleRef.current.x = Math.max(0, Math.min(CANVAS_WIDTH - PADDLE_WIDTH, scaledX - PADDLE_WIDTH / 2));
     }
-  }, [gameState]);
+  }, [gameState, getScaledX]);
 
   const handleMouseLeave = useCallback(() => {
     setMouseX(null);
   }, []);
 
-  // Handle touch movement for paddle control
-  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (gameState === 'playing') {
-      e.preventDefault();
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (rect && e.touches.length > 0) {
-        const x = e.touches[0].clientX - rect.left;
-        setTouchX(x);
-      }
+  // Handle touch for paddle control - INSTANT response
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (gameState === 'gameover') {
+      resetGame();
+      return;
     }
-  }, [gameState]);
+    if (gameState === 'ready') {
+      startGame();
+      return;
+    }
+    if (gameState === 'playing' && e.touches.length > 0) {
+      const scaledX = getScaledX(e.touches[0].clientX);
+      setTouchX(scaledX);
+      // Immediately move paddle
+      paddleRef.current.x = Math.max(0, Math.min(CANVAS_WIDTH - PADDLE_WIDTH, scaledX - PADDLE_WIDTH / 2));
+    }
+  }, [gameState, resetGame, startGame, getScaledX]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (gameState === 'playing' && e.touches.length > 0) {
+      const scaledX = getScaledX(e.touches[0].clientX);
+      setTouchX(scaledX);
+      // Immediately move paddle
+      paddleRef.current.x = Math.max(0, Math.min(CANVAS_WIDTH - PADDLE_WIDTH, scaledX - PADDLE_WIDTH / 2));
+    }
+  }, [gameState, getScaledX]);
 
   const handleTouchEnd = useCallback(() => {
     setTouchX(null);
   }, []);
 
-  // Handle canvas tap for game over retry
+  // Handle canvas click for game control
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (gameState === 'gameover') {
       resetGame();
     } else if (gameState === 'ready') {
-      startGame();
-    }
-  }, [gameState, resetGame, startGame]);
-
-  // Handle touch for game over retry
-  const handleCanvasTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (gameState === 'gameover') {
-      e.preventDefault();
-      resetGame();
-    } else if (gameState === 'ready') {
-      e.preventDefault();
       startGame();
     }
   }, [gameState, resetGame, startGame]);
@@ -755,7 +752,7 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
         onClick={handleCanvasClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        onTouchStart={handleCanvasTouchStart}
+        onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       />

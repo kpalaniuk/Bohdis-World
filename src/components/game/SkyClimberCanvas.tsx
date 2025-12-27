@@ -554,6 +554,9 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
   const [touchX, setTouchX] = useState<number | null>(null);
   const [mouseX, setMouseX] = useState<number | null>(null);
   const [isJumping, setIsJumping] = useState(false);
+  const touchActiveRef = useRef(false);
+  const touchMoveLeftRef = useRef(false);
+  const touchMoveRightRef = useRef(false);
   
   // Detect mobile device - improved iPad detection
   useEffect(() => {
@@ -718,37 +721,21 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
       drawSkyBackground(ctx, altitude);
 
       if (gameState === 'playing') {
-        // Input - use touch/mouse position for movement
-        const targetX = touchX !== null ? touchX : (mouseX !== null ? mouseX : null);
-        const canvasCenter = CANVAS_WIDTH / 2;
-        
-        if (targetX !== null) {
-          // Move based on touch/mouse position relative to center
-          const diff = targetX - canvasCenter;
-          const deadZone = 30; // Dead zone in center to prevent jitter
-          
-          if (Math.abs(diff) > deadZone) {
-            if (diff < 0) {
-              velocityXRef.current = -MOVE_SPEED;
-              facingRightRef.current = false;
-            } else {
-              velocityXRef.current = MOVE_SPEED;
-              facingRightRef.current = true;
-            }
-          } else {
-            velocityXRef.current = 0;
-          }
+        // Input - check touch refs first (most responsive), then keyboard
+        if (touchMoveLeftRef.current) {
+          velocityXRef.current = -MOVE_SPEED;
+          facingRightRef.current = false;
+        } else if (touchMoveRightRef.current) {
+          velocityXRef.current = MOVE_SPEED;
+          facingRightRef.current = true;
+        } else if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
+          velocityXRef.current = -MOVE_SPEED;
+          facingRightRef.current = false;
+        } else if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
+          velocityXRef.current = MOVE_SPEED;
+          facingRightRef.current = true;
         } else {
-          // Fallback to keyboard
-          if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
-            velocityXRef.current = -MOVE_SPEED;
-            facingRightRef.current = false;
-          } else if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
-            velocityXRef.current = MOVE_SPEED;
-            facingRightRef.current = true;
-          } else {
-            velocityXRef.current = 0;
-          }
+          velocityXRef.current = 0;
         }
         
         // Handle jump from touch - use a ref to track if jump was triggered
@@ -757,7 +744,14 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
             const isMoving = Math.abs(velocityXRef.current) > 0;
             const jumpPower = isMoving ? JUMP_FORCE + RUNNING_JUMP_BONUS : JUMP_FORCE;
             velocityYRef.current = jumpPower;
+            isGroundedRef.current = false;
             if (soundEnabled) playSound('jump');
+          } else if (hasDoubleJump && !hasDoubleJumpedRef.current) {
+            const isMoving = Math.abs(velocityXRef.current) > 0;
+            const jumpPower = isMoving ? DOUBLE_JUMP_FORCE + (RUNNING_JUMP_BONUS * 0.5) : DOUBLE_JUMP_FORCE;
+            velocityYRef.current = jumpPower;
+            hasDoubleJumpedRef.current = true;
+            if (soundEnabled) playSound('doubleJump');
           }
           setIsJumping(false);
         }
@@ -1087,11 +1081,25 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
             e.preventDefault();
             const rect = canvasRef.current?.getBoundingClientRect();
             if (rect && e.touches.length > 0) {
-              const x = e.touches[0].clientX - rect.left;
-              const y = e.touches[0].clientY - rect.top;
-              setTouchX(x);
-              // Jump if tapping in upper half of screen
-              if (y < CANVAS_HEIGHT / 2) {
+              // Scale touch to canvas coordinates
+              const x = ((e.touches[0].clientX - rect.left) / rect.width) * CANVAS_WIDTH;
+              const y = ((e.touches[0].clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
+              touchActiveRef.current = true;
+              
+              // Left third = move left, right third = move right, middle third = jump
+              const leftZone = CANVAS_WIDTH / 3;
+              const rightZone = (CANVAS_WIDTH * 2) / 3;
+              
+              if (x < leftZone) {
+                touchMoveLeftRef.current = true;
+                touchMoveRightRef.current = false;
+              } else if (x > rightZone) {
+                touchMoveRightRef.current = true;
+                touchMoveLeftRef.current = false;
+              } else {
+                // Middle zone - jump
+                touchMoveLeftRef.current = false;
+                touchMoveRightRef.current = false;
                 setIsJumping(true);
               }
             }
@@ -1102,14 +1110,28 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
             e.preventDefault();
             const rect = canvasRef.current?.getBoundingClientRect();
             if (rect && e.touches.length > 0) {
-              const x = e.touches[0].clientX - rect.left;
-              setTouchX(x);
+              const x = ((e.touches[0].clientX - rect.left) / rect.width) * CANVAS_WIDTH;
+              
+              const leftZone = CANVAS_WIDTH / 3;
+              const rightZone = (CANVAS_WIDTH * 2) / 3;
+              
+              if (x < leftZone) {
+                touchMoveLeftRef.current = true;
+                touchMoveRightRef.current = false;
+              } else if (x > rightZone) {
+                touchMoveRightRef.current = true;
+                touchMoveLeftRef.current = false;
+              } else {
+                touchMoveLeftRef.current = false;
+                touchMoveRightRef.current = false;
+              }
             }
           }
         }}
         onTouchEnd={() => {
-          setTouchX(null);
-          setIsJumping(false);
+          touchActiveRef.current = false;
+          touchMoveLeftRef.current = false;
+          touchMoveRightRef.current = false;
         }}
       />
       
@@ -1130,15 +1152,30 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
         </div>
       )}
       
-      {/* Mobile Instructions */}
+      {/* Mobile Touch Zones Visual Guide */}
       {isMobile && gameState === 'playing' && (
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none z-10">
-          <div className="bg-pixel-black/80 px-4 py-2 border-2 border-purple-400">
-            <p className="font-lcd text-purple-300 text-xs text-center">
-              Touch left/right to move • Tap top half to jump
-            </p>
+        <>
+          {/* Left zone indicator */}
+          <div className="absolute left-0 top-0 bottom-0 w-1/3 pointer-events-none z-5 border-r-2 border-purple-400/30 flex items-center justify-center">
+            <span className="text-4xl opacity-30">⬅️</span>
           </div>
-        </div>
+          {/* Right zone indicator */}
+          <div className="absolute right-0 top-0 bottom-0 w-1/3 pointer-events-none z-5 border-l-2 border-purple-400/30 flex items-center justify-center">
+            <span className="text-4xl opacity-30">➡️</span>
+          </div>
+          {/* Center zone - jump */}
+          <div className="absolute left-1/3 right-1/3 top-0 bottom-0 pointer-events-none z-5 flex items-center justify-center">
+            <span className="text-4xl opacity-30">⬆️</span>
+          </div>
+          {/* Instructions */}
+          <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none z-10">
+            <div className="bg-pixel-black/80 px-4 py-2 border-2 border-purple-400">
+              <p className="font-lcd text-purple-300 text-xs text-center">
+                Touch: LEFT=Move Left | CENTER=Jump | RIGHT=Move Right
+              </p>
+            </div>
+          </div>
+        </>
       )}
       
       {/* Retry Button Overlay (Game Over) */}

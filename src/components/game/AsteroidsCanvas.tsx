@@ -165,6 +165,10 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
   const [mouseX, setMouseX] = useState<number | null>(null);
   const [mouseY, setMouseY] = useState<number | null>(null);
   const [lastShootTime, setLastShootTime] = useState(0);
+  const touchActiveRef = useRef(false);
+  const touchRotateLeftRef = useRef(false);
+  const touchRotateRightRef = useRef(false);
+  const touchThrustRef = useRef(false);
   
   // Detect mobile device - improved iPad detection
   useEffect(() => {
@@ -313,46 +317,25 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
       if (gameState === 'playing') {
         const ship = shipRef.current;
         
-        // Use touch/mouse position for rotation and thrust
-        const targetX = touchX !== null ? touchX : (mouseX !== null ? mouseX : null);
-        const targetY = touchY !== null ? touchY : (mouseY !== null ? mouseY : null);
-        
-        if (targetX !== null && targetY !== null) {
-          // Calculate angle from ship to touch/mouse position
-          const dx = targetX - ship.x;
-          const dy = targetY - ship.y;
-          const targetAngle = Math.atan2(dy, dx);
-          
-          // Rotate ship towards touch/mouse position
-          let angleDiff = targetAngle - ship.rotation;
-          // Normalize angle difference to -PI to PI
-          while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-          while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-          
-          if (Math.abs(angleDiff) > 0.1) {
-            // Rotate towards target
-            if (angleDiff > 0) {
-              ship.rotation += ROTATION_SPEED;
-            } else {
-              ship.rotation -= ROTATION_SPEED;
-            }
-          }
-          
-          // Thrust based on distance from ship (closer = more thrust)
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const maxDistance = Math.sqrt(CANVAS_WIDTH * CANVAS_WIDTH + CANVAS_HEIGHT * CANVAS_HEIGHT);
-          const thrustAmount = Math.max(0, 1 - (distance / maxDistance) * 2); // More thrust when closer
-          ship.thrusting = thrustAmount > 0.3; // Thrust if within 70% of screen
-        } else {
-          // Fallback to keyboard controls
+        // Check touch controls first (most responsive), then keyboard
+        if (touchRotateLeftRef.current) {
+          ship.rotation -= ROTATION_SPEED * 1.5; // Faster rotation on touch
+        }
+        if (touchRotateRightRef.current) {
+          ship.rotation += ROTATION_SPEED * 1.5;
+        }
+        if (!touchRotateLeftRef.current && !touchRotateRightRef.current) {
+          // Keyboard rotation
           if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
             ship.rotation -= ROTATION_SPEED;
           }
           if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
             ship.rotation += ROTATION_SPEED;
           }
-          ship.thrusting = keysRef.current.has('ArrowUp') || keysRef.current.has('KeyW');
         }
+        
+        // Thrust - touch or keyboard
+        ship.thrusting = touchThrustRef.current || keysRef.current.has('ArrowUp') || keysRef.current.has('KeyW');
         if (ship.thrusting) {
           let shipSpeed = BASE_SHIP_SPEED + (currentLevel - 1) * 0.01;
           if (gameSettings?.asteroids?.shipSpeed) {
@@ -695,8 +678,8 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
           if (gameState === 'playing') {
             const rect = canvasRef.current?.getBoundingClientRect();
             if (rect) {
-              setMouseX(e.clientX - rect.left);
-              setMouseY(e.clientY - rect.top);
+              setMouseX(((e.clientX - rect.left) / rect.width) * CANVAS_WIDTH);
+              setMouseY(((e.clientY - rect.top) / rect.height) * CANVAS_HEIGHT);
             }
           }
         }}
@@ -715,13 +698,44 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
             e.preventDefault();
             const rect = canvasRef.current?.getBoundingClientRect();
             if (rect && e.touches.length > 0) {
-              setTouchX(e.touches[0].clientX - rect.left);
-              setTouchY(e.touches[0].clientY - rect.top);
-              // Shoot on tap
-              const now = Date.now();
-              if (now - lastShootTime > 200) {
-                shootBullet();
-                setLastShootTime(now);
+              // Scale to canvas coordinates
+              const x = ((e.touches[0].clientX - rect.left) / rect.width) * CANVAS_WIDTH;
+              const y = ((e.touches[0].clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
+              touchActiveRef.current = true;
+              
+              // Zone-based controls:
+              // Left third = rotate left
+              // Right third = rotate right  
+              // Top center = thrust
+              // Bottom center = shoot
+              const leftZone = CANVAS_WIDTH / 3;
+              const rightZone = (CANVAS_WIDTH * 2) / 3;
+              const topHalf = CANVAS_HEIGHT / 2;
+              
+              if (x < leftZone) {
+                touchRotateLeftRef.current = true;
+                touchRotateRightRef.current = false;
+                touchThrustRef.current = false;
+              } else if (x > rightZone) {
+                touchRotateRightRef.current = true;
+                touchRotateLeftRef.current = false;
+                touchThrustRef.current = false;
+              } else {
+                // Center zone
+                touchRotateLeftRef.current = false;
+                touchRotateRightRef.current = false;
+                if (y < topHalf) {
+                  // Top center = thrust
+                  touchThrustRef.current = true;
+                } else {
+                  // Bottom center = shoot
+                  touchThrustRef.current = false;
+                  const now = Date.now();
+                  if (now - lastShootTime > 200) {
+                    shootBullet();
+                    setLastShootTime(now);
+                  }
+                }
               }
             }
           }
@@ -731,14 +745,34 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
             e.preventDefault();
             const rect = canvasRef.current?.getBoundingClientRect();
             if (rect && e.touches.length > 0) {
-              setTouchX(e.touches[0].clientX - rect.left);
-              setTouchY(e.touches[0].clientY - rect.top);
+              const x = ((e.touches[0].clientX - rect.left) / rect.width) * CANVAS_WIDTH;
+              const y = ((e.touches[0].clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
+              
+              const leftZone = CANVAS_WIDTH / 3;
+              const rightZone = (CANVAS_WIDTH * 2) / 3;
+              const topHalf = CANVAS_HEIGHT / 2;
+              
+              if (x < leftZone) {
+                touchRotateLeftRef.current = true;
+                touchRotateRightRef.current = false;
+                touchThrustRef.current = false;
+              } else if (x > rightZone) {
+                touchRotateRightRef.current = true;
+                touchRotateLeftRef.current = false;
+                touchThrustRef.current = false;
+              } else {
+                touchRotateLeftRef.current = false;
+                touchRotateRightRef.current = false;
+                touchThrustRef.current = y < topHalf;
+              }
             }
           }
         }}
         onTouchEnd={() => {
-          setTouchX(null);
-          setTouchY(null);
+          touchActiveRef.current = false;
+          touchRotateLeftRef.current = false;
+          touchRotateRightRef.current = false;
+          touchThrustRef.current = false;
         }}
       />
       
@@ -759,15 +793,34 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
         </div>
       )}
       
-      {/* Mobile Instructions */}
+      {/* Mobile Touch Zones Visual Guide */}
       {isMobile && gameState === 'playing' && (
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none z-10">
-          <div className="bg-pixel-black/80 px-4 py-2 border-2 border-cyan-400">
-            <p className="font-lcd text-cyan-300 text-xs text-center">
-              Touch to aim & thrust • Tap to shoot
-            </p>
+        <>
+          {/* Left zone - rotate left */}
+          <div className="absolute left-0 top-0 bottom-0 w-1/3 pointer-events-none z-5 border-r-2 border-cyan-400/30 flex items-center justify-center">
+            <span className="text-3xl opacity-30">↶</span>
           </div>
-        </div>
+          {/* Right zone - rotate right */}
+          <div className="absolute right-0 top-0 bottom-0 w-1/3 pointer-events-none z-5 border-l-2 border-cyan-400/30 flex items-center justify-center">
+            <span className="text-3xl opacity-30">↷</span>
+          </div>
+          {/* Top center - thrust */}
+          <div className="absolute left-1/3 right-1/3 top-0 h-1/2 pointer-events-none z-5 border-b-2 border-cyan-400/30 flex items-center justify-center">
+            <span className="text-3xl opacity-30">🚀</span>
+          </div>
+          {/* Bottom center - shoot */}
+          <div className="absolute left-1/3 right-1/3 bottom-0 h-1/2 pointer-events-none z-5 flex items-center justify-center">
+            <span className="text-3xl opacity-30">💥</span>
+          </div>
+          {/* Instructions */}
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none z-10">
+            <div className="bg-pixel-black/80 px-3 py-1 border-2 border-cyan-400">
+              <p className="font-lcd text-cyan-300 text-[10px] text-center">
+                LEFT=Rotate Left | RIGHT=Rotate Right | TOP=Thrust | BOTTOM=Shoot
+              </p>
+            </div>
+          </div>
+        </>
       )}
       
       {/* Retry Button Overlay (Game Over) */}
