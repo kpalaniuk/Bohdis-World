@@ -54,7 +54,8 @@ export function GameWrapper({ children }: GameWrapperProps) {
   return (
     <>
       {/* Background Game - always running (silent) */}
-      <div className="pointer-events-none">
+      {/* Enable pointer events during gate phase so touch/tap works for jumping */}
+      <div className={showContent ? "pointer-events-none" : ""}>
         <RunnerGame onObstacleCleared={handleObstacleCleared} disableSounds={true} />
       </div>
 

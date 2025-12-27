@@ -396,7 +396,8 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
             Jump over 3 obstacles to enter!
           </p>
           
-          <div className="flex items-center justify-center gap-2 mb-4">
+          {/* Desktop instructions */}
+          <div className="hidden md:flex items-center justify-center gap-2 mb-2">
             <span className="font-pixel text-ocean-blue text-sm">PRESS</span>
             <kbd 
               className="px-4 py-2 bg-ocean-blue text-white font-pixel text-sm border-4 border-pixel-black"
@@ -407,7 +408,21 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
             <span className="font-pixel text-ocean-blue text-sm">TO JUMP</span>
           </div>
           
-          <p className="font-lcd text-gray-400 text-lg">
+          {/* Mobile instructions - shown prominently */}
+          <div className="md:hidden flex flex-col items-center gap-3">
+            <div 
+              className="px-6 py-3 bg-ocean-blue text-white font-pixel text-lg border-4 border-pixel-black animate-pulse"
+              style={{ boxShadow: '3px 3px 0px #2d2d2d' }}
+            >
+              👆 TAP SCREEN TO JUMP!
+            </div>
+            <p className="font-lcd text-foamy-green text-sm">
+              Tap anywhere to jump over obstacles
+            </p>
+          </div>
+          
+          {/* Desktop hint for mobile */}
+          <p className="hidden md:block font-lcd text-gray-400 text-sm mt-2">
             (or tap the screen on mobile)
           </p>
         </div>

@@ -144,18 +144,35 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false }: RunnerG
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleJump]);
 
-  // Touch controls
+  // Touch controls - listen on document for full-screen touch support
   useEffect(() => {
     const handleTouch = (e: TouchEvent) => {
+      // Don't prevent default on form elements
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.tagName === 'A') {
+        return;
+      }
       e.preventDefault();
       handleJump();
     };
 
-    const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.addEventListener('touchstart', handleTouch, { passive: false });
-      return () => canvas.removeEventListener('touchstart', handleTouch);
-    }
+    const handleClick = (e: MouseEvent) => {
+      // Don't trigger on form elements or buttons
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.tagName === 'A' || target.closest('form')) {
+        return;
+      }
+      handleJump();
+    };
+
+    // Listen on document for full coverage
+    document.addEventListener('touchstart', handleTouch, { passive: false });
+    document.addEventListener('click', handleClick);
+    
+    return () => {
+      document.removeEventListener('touchstart', handleTouch);
+      document.removeEventListener('click', handleClick);
+    };
   }, [handleJump]);
 
   // Game loop
