@@ -224,7 +224,7 @@ function CharacterCard({ character, isSelected, onClick }: CharacterCardProps) {
 }
 
 interface StrengthBarProps {
-  icon: React.ComponentType<{ size: number; className?: string }>;
+  icon: React.ComponentType<{ size: number; className?: string; style?: React.CSSProperties }>;
   label: string;
   value: number;
   maxValue: number;
