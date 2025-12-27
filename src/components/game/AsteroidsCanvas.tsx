@@ -141,19 +141,6 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
   
-  // Load game settings
-  useEffect(() => {
-    if (user?.id) {
-      getGameSettingsForUser(user.id, 'asteroids').then(settings => {
-        setGameSettings(settings);
-        if (settings?.asteroids?.startingLives) {
-          setLives(settings.asteroids.startingLives as number);
-        }
-      });
-    }
-  }, [user]);
-  const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
-  
   const shipRef = useRef<Ship>({
     x: CANVAS_WIDTH / 2,
     y: CANVAS_HEIGHT / 2,
@@ -171,6 +158,19 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
   const { addCoins } = useCoinStore();
   const { user } = useAuth();
   const [gameSettings, setGameSettings] = useState<GameSettingsConfig | null>(null);
+  const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
+  
+  // Load game settings
+  useEffect(() => {
+    if (user?.id) {
+      getGameSettingsForUser(user.id, 'asteroids').then(settings => {
+        setGameSettings(settings);
+        if (settings?.asteroids?.startingLives) {
+          setLives(settings.asteroids.startingLives as number);
+        }
+      });
+    }
+  }, [user]);
   
   // Initialize level
   useEffect(() => {
