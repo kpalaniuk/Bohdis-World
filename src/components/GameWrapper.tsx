@@ -54,10 +54,12 @@ export function GameWrapper({ children }: GameWrapperProps) {
   return (
     <>
       {/* Background Game - always running (silent) */}
-      {/* Enable pointer events during gate phase so touch/tap works for jumping */}
-      <div className={showContent ? "pointer-events-none" : ""}>
-        <RunnerGame onObstacleCleared={handleObstacleCleared} disableSounds={true} />
-      </div>
+      {/* Canvas handles its own pointer-events based on enableGlobalTouch prop */}
+      <RunnerGame 
+        onObstacleCleared={handleObstacleCleared} 
+        disableSounds={true} 
+        enableGlobalTouch={!showContent} // Only enable document-level touch during gate phase
+      />
 
       {/* Gate Overlay - shown until unlocked */}
       {!showContent && <GateOverlay onUnlock={handleUnlock} />}
@@ -66,7 +68,7 @@ export function GameWrapper({ children }: GameWrapperProps) {
       {showContent && (
         <>
           <NavBar />
-          <main className="relative z-10 pt-16 min-h-screen">
+          <main className="relative z-10 pt-16 min-h-screen overflow-y-auto">
             {children}
           </main>
         </>

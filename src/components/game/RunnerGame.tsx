@@ -17,6 +17,7 @@ interface Obstacle {
 interface RunnerGameProps {
   onObstacleCleared?: () => void;
   disableSounds?: boolean;
+  enableGlobalTouch?: boolean; // Enable document-level touch handlers (for gate phase)
 }
 
 const GRAVITY = 0.8;
@@ -27,7 +28,7 @@ const GAME_SPEED_MAX = 12;
 const GROUND_Y_OFFSET = 80;
 const CHARACTER_SCALE = 2;
 
-export function RunnerGame({ onObstacleCleared, disableSounds = false }: RunnerGameProps) {
+export function RunnerGame({ onObstacleCleared, disableSounds = false, enableGlobalTouch = false }: RunnerGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(0);
@@ -144,8 +145,23 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false }: RunnerG
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleJump]);
 
-  // Touch controls - listen on document for full-screen touch support
+  // Touch controls - only use document-level handlers during gate phase to not block scrolling
   useEffect(() => {
+    if (!enableGlobalTouch) {
+      // When site is unlocked, only listen on the canvas (handled by pointer-events-none on parent)
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      
+      const handleCanvasTouch = (e: TouchEvent) => {
+        e.preventDefault();
+        handleJump();
+      };
+      
+      canvas.addEventListener('touchstart', handleCanvasTouch, { passive: false });
+      return () => canvas.removeEventListener('touchstart', handleCanvasTouch);
+    }
+    
+    // During gate phase, listen on document for full-screen touch support
     const handleTouch = (e: TouchEvent) => {
       // Don't prevent default on form elements
       const target = e.target as HTMLElement;
@@ -165,7 +181,7 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false }: RunnerG
       handleJump();
     };
 
-    // Listen on document for full coverage
+    // Listen on document for full coverage during gate phase
     document.addEventListener('touchstart', handleTouch, { passive: false });
     document.addEventListener('click', handleClick);
     
@@ -173,7 +189,7 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false }: RunnerG
       document.removeEventListener('touchstart', handleTouch);
       document.removeEventListener('click', handleClick);
     };
-  }, [handleJump]);
+  }, [handleJump, enableGlobalTouch]);
 
   // Game loop
   useEffect(() => {
@@ -339,8 +355,11 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false }: RunnerG
       ref={canvasRef}
       width={dimensions.width}
       height={dimensions.height}
-      className="fixed inset-0 z-0"
-      style={{ touchAction: 'none' }}
+      className="fixed inset-0 z-0 pointer-events-none"
+      style={{ 
+        touchAction: enableGlobalTouch ? 'none' : 'auto',
+        pointerEvents: enableGlobalTouch ? 'auto' : 'none',
+      }}
     />
   );
 }

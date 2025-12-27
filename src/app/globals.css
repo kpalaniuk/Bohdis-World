@@ -35,6 +35,9 @@
 /* Base styles */
 html {
   font-size: 16px;
+  height: 100%;
+  /* Enable smooth scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -44,6 +47,10 @@ body {
   font-size: 1.25rem;
   line-height: 1.6;
   overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 100%;
+  /* Prevent iOS bounce/overscroll issues */
+  overscroll-behavior: none;
 }
 
 /* Pixel font for headings */
@@ -309,4 +316,19 @@ input:focus-visible {
 ::selection {
   background: var(--foamy-green);
   color: var(--pixel-black);
+}
+
+/* Mobile scrolling improvements */
+@media (max-width: 1024px) {
+  /* Ensure scrollable containers work on touch devices */
+  .overflow-y-auto,
+  [class*="overflow-y-auto"] {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent body scroll lock issues */
+  html, body {
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
 }
