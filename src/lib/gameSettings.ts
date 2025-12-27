@@ -195,10 +195,10 @@ export async function getAllGameSettings(): Promise<Array<GameSettings & { usern
 export async function getGameSettingsForUser(
   userId: string,
   gameName: string
-): Promise<Record<string, unknown> | null> {
+): Promise<GameSettingsConfig | null> {
   const settings = await getUserGameSettings(userId, gameName);
   if (settings.length > 0) {
-    return settings[0].settings;
+    return settings[0].settings as GameSettingsConfig;
   }
   return null;
 }
