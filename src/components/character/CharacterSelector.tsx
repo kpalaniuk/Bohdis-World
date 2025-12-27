@@ -29,26 +29,27 @@ export function CharacterSelector() {
   const selectedCharacter = selectedType ? CHARACTERS[selectedType] : null;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 md:p-8">
-      <PixelCard variant="glass" padding="lg" className="max-w-4xl w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 
-            className="font-pixel text-foamy-green text-xl md:text-2xl mb-3"
-            style={{ textShadow: '3px 3px 0px #2d2d2d' }}
-          >
-            CHOOSE YOUR CHARACTER!
-          </h1>
-          <p className="font-lcd text-gray-300 text-lg">
-            Hey {user?.displayName || user?.username || 'Player'}! Pick your adventure buddy.
-          </p>
-          <p className="font-lcd text-gray-500 text-sm mt-2">
-            Each character has unique strengths in different games!
-          </p>
-        </div>
+    <div className="min-h-screen overflow-y-auto py-4 md:py-8">
+      <div className="min-h-full flex items-start md:items-center justify-center px-4 md:px-8">
+        <PixelCard variant="glass" padding="lg" className="max-w-4xl w-full my-auto">
+          {/* Header */}
+          <div className="text-center mb-6 md:mb-8">
+            <h1 
+              className="font-pixel text-foamy-green text-lg md:text-2xl mb-2 md:mb-3"
+              style={{ textShadow: '3px 3px 0px #2d2d2d' }}
+            >
+              CHOOSE YOUR CHARACTER!
+            </h1>
+            <p className="font-lcd text-gray-300 text-base md:text-lg">
+              Hey {user?.displayName || user?.username || 'Player'}! Pick your adventure buddy.
+            </p>
+            <p className="font-lcd text-gray-500 text-xs md:text-sm mt-1 md:mt-2">
+              Each character has unique strengths in different games!
+            </p>
+          </div>
 
         {/* Character Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
           {characterList.map((char) => (
             <CharacterCard
               key={char.type}
@@ -61,28 +62,28 @@ export function CharacterSelector() {
 
         {/* Selected Character Details */}
         {selectedCharacter && (
-          <div className="border-t-4 border-pixel-shadow pt-6">
-            <div className="flex flex-col md:flex-row gap-6">
+          <div className="border-t-4 border-pixel-shadow pt-4 md:pt-6">
+            <div className="flex flex-col md:flex-row gap-4 md:gap-6">
               {/* Character Preview */}
               <div 
-                className="w-32 h-32 mx-auto md:mx-0 flex-shrink-0 flex items-center justify-center border-4 border-pixel-black"
+                className="w-20 h-20 md:w-32 md:h-32 mx-auto md:mx-0 flex-shrink-0 flex items-center justify-center border-4 border-pixel-black"
                 style={{ 
                   backgroundColor: selectedCharacter.primaryColor,
                   boxShadow: '4px 4px 0px #2d2d2d'
                 }}
               >
-                <span className="text-6xl">{selectedCharacter.emoji}</span>
+                <span className="text-4xl md:text-6xl">{selectedCharacter.emoji}</span>
               </div>
 
               {/* Character Info */}
               <div className="flex-1">
                 <h3 
-                  className="font-pixel text-lg mb-2"
+                  className="font-pixel text-base md:text-lg mb-1 md:mb-2 text-center md:text-left"
                   style={{ color: selectedCharacter.primaryColor, textShadow: '2px 2px 0px #2d2d2d' }}
                 >
                   {selectedCharacter.name}
                 </h3>
-                <p className="font-lcd text-gray-300 mb-4">
+                <p className="font-lcd text-gray-300 text-sm md:text-base mb-3 md:mb-4 text-center md:text-left">
                   {selectedCharacter.description}
                 </p>
 
@@ -121,7 +122,7 @@ export function CharacterSelector() {
             </div>
 
             {/* Confirm Button */}
-            <div className="mt-6 flex gap-4">
+            <div className="mt-4 md:mt-6 flex gap-3 md:gap-4">
               {!isConfirming ? (
                 <PixelButton
                   variant="primary"
@@ -155,7 +156,8 @@ export function CharacterSelector() {
             </div>
           </div>
         )}
-      </PixelCard>
+        </PixelCard>
+      </div>
     </div>
   );
 }
@@ -171,7 +173,7 @@ function CharacterCard({ character, isSelected, onClick }: CharacterCardProps) {
     <button
       onClick={onClick}
       className={`
-        relative p-4 border-4 transition-all duration-200
+        relative p-3 md:p-4 border-4 transition-all duration-200
         ${isSelected 
           ? 'border-foamy-green bg-foamy-green/10 scale-105' 
           : 'border-pixel-shadow bg-pixel-black/50 hover:border-gray-500 hover:bg-pixel-shadow/30'
@@ -183,40 +185,40 @@ function CharacterCard({ character, isSelected, onClick }: CharacterCardProps) {
     >
       {/* Selection indicator */}
       {isSelected && (
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-foamy-green border-2 border-pixel-black flex items-center justify-center">
-          <Check size={14} className="text-pixel-black" />
+        <div className="absolute -top-2 -right-2 w-5 h-5 md:w-6 md:h-6 bg-foamy-green border-2 border-pixel-black flex items-center justify-center">
+          <Check size={12} className="text-pixel-black" />
         </div>
       )}
 
       {/* Character emoji */}
       <div 
-        className="w-16 h-16 mx-auto mb-3 flex items-center justify-center border-2 border-pixel-black"
+        className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-2 md:mb-3 flex items-center justify-center border-2 border-pixel-black"
         style={{ backgroundColor: character.primaryColor }}
       >
-        <span className="text-3xl">{character.emoji}</span>
+        <span className="text-2xl md:text-3xl">{character.emoji}</span>
       </div>
 
       {/* Character name */}
       <h4 
-        className="font-pixel text-xs text-center truncate"
+        className="font-pixel text-[10px] md:text-xs text-center truncate"
         style={{ color: isSelected ? character.primaryColor : '#ffffff' }}
       >
         {character.name}
       </h4>
 
       {/* Quick stats */}
-      <div className="mt-2 flex justify-center gap-1">
+      <div className="mt-1 md:mt-2 flex justify-center gap-1">
         {character.strengths.mathSpeed > 1 && (
-          <span className="text-[10px]" title="Math bonus">🧠</span>
+          <span className="text-[8px] md:text-[10px]" title="Math bonus">🧠</span>
         )}
         {character.strengths.jumpHeight > 1.05 && (
-          <span className="text-[10px]" title="Jump bonus">⬆️</span>
+          <span className="text-[8px] md:text-[10px]" title="Jump bonus">⬆️</span>
         )}
         {character.strengths.coinBonus > 0.1 && (
-          <span className="text-[10px]" title="Coin bonus">💰</span>
+          <span className="text-[8px] md:text-[10px]" title="Coin bonus">💰</span>
         )}
         {character.strengths.shieldDuration > 1.1 && (
-          <span className="text-[10px]" title="Shield bonus">🛡️</span>
+          <span className="text-[8px] md:text-[10px]" title="Shield bonus">🛡️</span>
         )}
       </div>
     </button>
