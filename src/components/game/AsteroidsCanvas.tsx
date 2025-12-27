@@ -160,12 +160,11 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
   const [gameSettings, setGameSettings] = useState<GameSettingsConfig | null>(null);
   const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
   const [isMobile, setIsMobile] = useState(false);
-  const [touchControls, setTouchControls] = useState({ 
-    rotateLeft: false, 
-    rotateRight: false, 
-    thrust: false, 
-    shoot: false 
-  });
+  const [touchX, setTouchX] = useState<number | null>(null);
+  const [touchY, setTouchY] = useState<number | null>(null);
+  const [mouseX, setMouseX] = useState<number | null>(null);
+  const [mouseY, setMouseY] = useState<number | null>(null);
+  const [lastShootTime, setLastShootTime] = useState(0);
   
   // Detect mobile device - improved iPad detection
   useEffect(() => {
@@ -314,16 +313,46 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
       if (gameState === 'playing') {
         const ship = shipRef.current;
         
-        // Rotate ship
-        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA') || touchControls.rotateLeft) {
-          ship.rotation -= ROTATION_SPEED;
-        }
-        if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD') || touchControls.rotateRight) {
-          ship.rotation += ROTATION_SPEED;
-        }
+        // Use touch/mouse position for rotation and thrust
+        const targetX = touchX !== null ? touchX : (mouseX !== null ? mouseX : null);
+        const targetY = touchY !== null ? touchY : (mouseY !== null ? mouseY : null);
         
-        // Thrust - level-based speed with custom multiplier
-        ship.thrusting = keysRef.current.has('ArrowUp') || keysRef.current.has('KeyW') || touchControls.thrust;
+        if (targetX !== null && targetY !== null) {
+          // Calculate angle from ship to touch/mouse position
+          const dx = targetX - ship.x;
+          const dy = targetY - ship.y;
+          const targetAngle = Math.atan2(dy, dx);
+          
+          // Rotate ship towards touch/mouse position
+          let angleDiff = targetAngle - ship.rotation;
+          // Normalize angle difference to -PI to PI
+          while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+          while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+          
+          if (Math.abs(angleDiff) > 0.1) {
+            // Rotate towards target
+            if (angleDiff > 0) {
+              ship.rotation += ROTATION_SPEED;
+            } else {
+              ship.rotation -= ROTATION_SPEED;
+            }
+          }
+          
+          // Thrust based on distance from ship (closer = more thrust)
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const maxDistance = Math.sqrt(CANVAS_WIDTH * CANVAS_WIDTH + CANVAS_HEIGHT * CANVAS_HEIGHT);
+          const thrustAmount = Math.max(0, 1 - (distance / maxDistance) * 2); // More thrust when closer
+          ship.thrusting = thrustAmount > 0.3; // Thrust if within 70% of screen
+        } else {
+          // Fallback to keyboard controls
+          if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
+            ship.rotation -= ROTATION_SPEED;
+          }
+          if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
+            ship.rotation += ROTATION_SPEED;
+          }
+          ship.thrusting = keysRef.current.has('ArrowUp') || keysRef.current.has('KeyW');
+        }
         if (ship.thrusting) {
           let shipSpeed = BASE_SHIP_SPEED + (currentLevel - 1) * 0.01;
           if (gameSettings?.asteroids?.shipSpeed) {
@@ -628,7 +657,7 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-  }, [gameState, currentLevel, score, lives, soundEnabled, addCoins, onGameOver, resetGame]);
+  }, [gameState, currentLevel, score, lives, soundEnabled, addCoins, onGameOver, resetGame, touchX, touchY, mouseX, mouseY, shootBullet]);
   
   // Handle retry on game over
   const handleRetry = useCallback(() => {
@@ -653,7 +682,27 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
             handleRetry();
           } else if (gameState === 'ready') {
             startGame();
+          } else if (gameState === 'playing') {
+            // Shoot on click
+            const now = Date.now();
+            if (now - lastShootTime > 200) { // Rate limit shooting
+              shootBullet();
+              setLastShootTime(now);
+            }
           }
+        }}
+        onMouseMove={(e) => {
+          if (gameState === 'playing') {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect) {
+              setMouseX(e.clientX - rect.left);
+              setMouseY(e.clientY - rect.top);
+            }
+          }
+        }}
+        onMouseLeave={() => {
+          setMouseX(null);
+          setMouseY(null);
         }}
         onTouchStart={(e) => {
           if (gameState === 'gameover') {
@@ -662,7 +711,34 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
           } else if (gameState === 'ready') {
             e.preventDefault();
             startGame();
+          } else if (gameState === 'playing') {
+            e.preventDefault();
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect && e.touches.length > 0) {
+              setTouchX(e.touches[0].clientX - rect.left);
+              setTouchY(e.touches[0].clientY - rect.top);
+              // Shoot on tap
+              const now = Date.now();
+              if (now - lastShootTime > 200) {
+                shootBullet();
+                setLastShootTime(now);
+              }
+            }
           }
+        }}
+        onTouchMove={(e) => {
+          if (gameState === 'playing') {
+            e.preventDefault();
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect && e.touches.length > 0) {
+              setTouchX(e.touches[0].clientX - rect.left);
+              setTouchY(e.touches[0].clientY - rect.top);
+            }
+          }
+        }}
+        onTouchEnd={() => {
+          setTouchX(null);
+          setTouchY(null);
         }}
       />
       
@@ -683,61 +759,14 @@ export function AsteroidsCanvas({ onGameOver, onLevelComplete }: AsteroidsCanvas
         </div>
       )}
       
-      {/* Mobile On-Screen Controls */}
+      {/* Mobile Instructions */}
       {isMobile && gameState === 'playing' && (
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 pointer-events-none">
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, rotateLeft: true }));
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, rotateLeft: false }));
-            }}
-            className="pointer-events-auto w-14 h-14 bg-pixel-black/80 border-4 border-cyan-400 text-white font-pixel text-lg flex items-center justify-center active:bg-cyan-400"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            ↶
-          </button>
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, thrust: true }));
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, thrust: false }));
-            }}
-            className="pointer-events-auto w-14 h-14 bg-pixel-black/80 border-4 border-cyan-400 text-white font-pixel text-lg flex items-center justify-center active:bg-cyan-400"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            ↑
-          </button>
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              shootBullet();
-            }}
-            className="pointer-events-auto w-14 h-14 bg-pixel-black/80 border-4 border-yellow-400 text-white font-pixel text-lg flex items-center justify-center active:bg-yellow-400"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            ⚡
-          </button>
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, rotateRight: true }));
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, rotateRight: false }));
-            }}
-            className="pointer-events-auto w-14 h-14 bg-pixel-black/80 border-4 border-cyan-400 text-white font-pixel text-lg flex items-center justify-center active:bg-cyan-400"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            ↷
-          </button>
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none z-10">
+          <div className="bg-pixel-black/80 px-4 py-2 border-2 border-cyan-400">
+            <p className="font-lcd text-cyan-300 text-xs text-center">
+              Touch to aim & thrust • Tap to shoot
+            </p>
+          </div>
         </div>
       )}
       

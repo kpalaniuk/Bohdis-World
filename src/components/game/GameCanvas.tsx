@@ -475,6 +475,10 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
     characterType,
     strengths,
     soundEnabled,
+    jumpHeight,
+    doubleJumpEnabled,
+    showSettings,
+    isMobile,
   ]);
 
   // Handle retry on game over

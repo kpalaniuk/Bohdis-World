@@ -672,7 +672,7 @@ export function BrickBreakerCanvas({ onGameOver, onLevelComplete }: BrickBreaker
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-  }, [gameState, currentLevel, score, lives, cheatActive, soundEnabled, resetBall, addCoins, onGameOver, paddleSpeed]);
+  }, [gameState, currentLevel, score, lives, cheatActive, soundEnabled, resetBall, addCoins, onGameOver, paddleSpeed, mouseX, touchX, gameSettings]);
   
   // Handle paddle speed adjustment in settings
   useEffect(() => {

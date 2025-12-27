@@ -551,7 +551,9 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
   const [displayAltitude, setDisplayAltitude] = useState(0);
   const [lives, setLives] = useState(3);
   const [isMobile, setIsMobile] = useState(false);
-  const [touchControls, setTouchControls] = useState({ left: false, right: false });
+  const [touchX, setTouchX] = useState<number | null>(null);
+  const [mouseX, setMouseX] = useState<number | null>(null);
+  const [isJumping, setIsJumping] = useState(false);
   
   // Detect mobile device - improved iPad detection
   useEffect(() => {
@@ -716,18 +718,49 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
       drawSkyBackground(ctx, altitude);
 
       if (gameState === 'playing') {
-        // Input
-        if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA') || touchControls.left) {
-          velocityXRef.current = -MOVE_SPEED;
-          facingRightRef.current = false;
-        } else if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD') || touchControls.right) {
-          velocityXRef.current = MOVE_SPEED;
-          facingRightRef.current = true;
+        // Input - use touch/mouse position for movement
+        const targetX = touchX !== null ? touchX : (mouseX !== null ? mouseX : null);
+        const canvasCenter = CANVAS_WIDTH / 2;
+        
+        if (targetX !== null) {
+          // Move based on touch/mouse position relative to center
+          const diff = targetX - canvasCenter;
+          const deadZone = 30; // Dead zone in center to prevent jitter
+          
+          if (Math.abs(diff) > deadZone) {
+            if (diff < 0) {
+              velocityXRef.current = -MOVE_SPEED;
+              facingRightRef.current = false;
+            } else {
+              velocityXRef.current = MOVE_SPEED;
+              facingRightRef.current = true;
+            }
+          } else {
+            velocityXRef.current = 0;
+          }
         } else {
-          velocityXRef.current = 0;
+          // Fallback to keyboard
+          if (keysRef.current.has('ArrowLeft') || keysRef.current.has('KeyA')) {
+            velocityXRef.current = -MOVE_SPEED;
+            facingRightRef.current = false;
+          } else if (keysRef.current.has('ArrowRight') || keysRef.current.has('KeyD')) {
+            velocityXRef.current = MOVE_SPEED;
+            facingRightRef.current = true;
+          } else {
+            velocityXRef.current = 0;
+          }
         }
         
-        // Handle jump from touch - handled in button onTouchStart
+        // Handle jump from touch - use a ref to track if jump was triggered
+        if (isJumping) {
+          if (isGroundedRef.current) {
+            const isMoving = Math.abs(velocityXRef.current) > 0;
+            const jumpPower = isMoving ? JUMP_FORCE + RUNNING_JUMP_BONUS : JUMP_FORCE;
+            velocityYRef.current = jumpPower;
+            if (soundEnabled) playSound('jump');
+          }
+          setIsJumping(false);
+        }
 
         // Gravity pulls DOWN (reduces Y in world coords)
         velocityYRef.current -= GRAVITY;
@@ -998,6 +1031,10 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
     onGameOver,
     onVictory,
     respawnAtCheckpoint,
+    touchX,
+    mouseX,
+    isJumping,
+    handleJump,
   ]);
 
   // Handle retry on game over
@@ -1027,6 +1064,18 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
             startGame();
           }
         }}
+        onMouseMove={(e) => {
+          if (gameState === 'playing') {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect) {
+              const x = e.clientX - rect.left;
+              setMouseX(x);
+            }
+          }
+        }}
+        onMouseLeave={() => {
+          setMouseX(null);
+        }}
         onTouchStart={(e) => {
           if (gameState === 'gameover') {
             e.preventDefault();
@@ -1034,7 +1083,33 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
           } else if (gameState === 'ready') {
             e.preventDefault();
             startGame();
+          } else if (gameState === 'playing') {
+            e.preventDefault();
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect && e.touches.length > 0) {
+              const x = e.touches[0].clientX - rect.left;
+              const y = e.touches[0].clientY - rect.top;
+              setTouchX(x);
+              // Jump if tapping in upper half of screen
+              if (y < CANVAS_HEIGHT / 2) {
+                setIsJumping(true);
+              }
+            }
           }
+        }}
+        onTouchMove={(e) => {
+          if (gameState === 'playing') {
+            e.preventDefault();
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect && e.touches.length > 0) {
+              const x = e.touches[0].clientX - rect.left;
+              setTouchX(x);
+            }
+          }
+        }}
+        onTouchEnd={() => {
+          setTouchX(null);
+          setIsJumping(false);
         }}
       />
       
@@ -1055,47 +1130,14 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
         </div>
       )}
       
-      {/* Mobile On-Screen Controls */}
+      {/* Mobile Instructions */}
       {isMobile && gameState === 'playing' && (
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 pointer-events-none">
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, left: true }));
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, left: false }));
-            }}
-            className="pointer-events-auto w-16 h-16 bg-pixel-black/80 border-4 border-purple-400 text-white font-pixel text-xl flex items-center justify-center active:bg-purple-400"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            ←
-          </button>
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              handleJump();
-            }}
-            className="pointer-events-auto w-20 h-20 bg-pixel-black/80 border-4 border-purple-400 text-white font-pixel text-xl flex items-center justify-center active:bg-purple-400"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            ↑
-          </button>
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, right: true }));
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setTouchControls(prev => ({ ...prev, right: false }));
-            }}
-            className="pointer-events-auto w-16 h-16 bg-pixel-black/80 border-4 border-purple-400 text-white font-pixel text-xl flex items-center justify-center active:bg-purple-400"
-            style={{ boxShadow: '4px 4px 0px #1a1a1a' }}
-          >
-            →
-          </button>
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none z-10">
+          <div className="bg-pixel-black/80 px-4 py-2 border-2 border-purple-400">
+            <p className="font-lcd text-purple-300 text-xs text-center">
+              Touch left/right to move • Tap top half to jump
+            </p>
+          </div>
         </div>
       )}
       
