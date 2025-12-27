@@ -135,7 +135,7 @@ export default function GameSettingsPage() {
     
     setSaving(true);
     try {
-      const success = await setUserGameSettings(selectedUserId, selectedGame, settings);
+      const success = await setUserGameSettings(selectedUserId, selectedGame, settings as Record<string, unknown>);
       if (success) {
         alert('Settings saved successfully!');
       } else {
