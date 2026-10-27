@@ -28,6 +28,13 @@ const GAME_SPEED_MAX = 12;
 const GROUND_Y_OFFSET = 80;
 const CHARACTER_SCALE = 2;
 
+// Taps, clicks and Space presses on these belong to the page, never to the background surfer.
+const PAGE_CONTROLS = 'input, textarea, select, button, a, label, form, [role="button"], [contenteditable="true"], [data-no-jump]';
+
+function isPageControl(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(PAGE_CONTROLS) !== null;
+}
+
 export function RunnerGame({ onObstacleCleared, disableSounds = false, enableGlobalTouch = false }: RunnerGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<number | undefined>(undefined);
@@ -132,59 +139,41 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false, enableGlo
     }
   }, [dimensions.height, isPlaying, setPlaying, strengths, soundEnabled]);
 
-  // Keyboard controls
+  // Keyboard controls: only on the entry gate. Once the site is open the surfer is scenery and
+  // must not take Space away from text boxes, buttons or the arcade games.
   useEffect(() => {
+    if (!enableGlobalTouch) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat) {
-        e.preventDefault();
-        handleJump();
-      }
+      if (e.code !== 'Space' || e.repeat) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || isPageControl(e.target)) return;
+      e.preventDefault();
+      handleJump();
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleJump]);
+  }, [handleJump, enableGlobalTouch]);
 
-  // Touch controls - only use document-level handlers during gate phase to not block scrolling
+  // Touch controls: only on the entry gate. After that the canvas has pointer-events: none and
+  // takes no input at all.
   useEffect(() => {
-    if (!enableGlobalTouch) {
-      // When site is unlocked, only listen on the canvas (handled by pointer-events-none on parent)
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      
-      const handleCanvasTouch = (e: TouchEvent) => {
-        e.preventDefault();
-        handleJump();
-      };
-      
-      canvas.addEventListener('touchstart', handleCanvasTouch, { passive: false });
-      return () => canvas.removeEventListener('touchstart', handleCanvasTouch);
-    }
-    
-    // During gate phase, listen on document for full-screen touch support
+    if (!enableGlobalTouch) return;
+
+    // During the gate, the whole screen is the jump button, except the page's own controls.
     const handleTouch = (e: TouchEvent) => {
-      // Don't prevent default on form elements
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.tagName === 'A') {
-        return;
-      }
+      if (isPageControl(e.target)) return;
       e.preventDefault();
       handleJump();
     };
 
     const handleClick = (e: MouseEvent) => {
-      // Don't trigger on form elements or buttons
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.tagName === 'A' || target.closest('form')) {
-        return;
-      }
+      if (isPageControl(e.target)) return;
       handleJump();
     };
 
-    // Listen on document for full coverage during gate phase
     document.addEventListener('touchstart', handleTouch, { passive: false });
     document.addEventListener('click', handleClick);
-    
+
     return () => {
       document.removeEventListener('touchstart', handleTouch);
       document.removeEventListener('click', handleClick);
@@ -202,6 +191,10 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false, enableGlo
     let obstacleTimer = 0;
     const OBSTACLE_INTERVAL = 120; // frames between obstacles
 
+    // After the gate the surfer is scenery: no obstacles, no score, no writes to the shared store.
+    const running = enableGlobalTouch && isPlaying && !isPaused;
+    if (!running) obstaclesRef.current = [];
+
     const gameLoop = (timestamp: number) => {
       const deltaTime = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;
@@ -214,7 +207,7 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false, enableGlo
       scrollOffsetRef.current += gameSpeedRef.current * bgSpeed;
       drawBackground(ctx, dimensions.width, dimensions.height, currentTheme, scrollOffsetRef.current);
 
-      if (!isPaused && isPlaying) {
+      if (running) {
         // Update score
         scoreRef.current += 1;
         if (scoreRef.current % 60 === 0) {
@@ -307,6 +300,13 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false, enableGlo
         }
       }
 
+      if (!running) {
+        // Stand the surfer on the ground so it never freezes mid-jump.
+        characterYRef.current = dimensions.height - GROUND_Y_OFFSET - CHARACTER_HEIGHT * CHARACTER_SCALE;
+        velocityYRef.current = 0;
+        isJumpingRef.current = false;
+      }
+
       // Draw ground details
       drawGround(ctx, dimensions.width, dimensions.height, currentTheme, scrollOffsetRef.current);
 
@@ -314,11 +314,13 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false, enableGlo
       const characterX = 100;
       drawCharacter(ctx, characterType, characterX, characterYRef.current, CHARACTER_SCALE, isJumpingRef.current);
 
-      // Draw score
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '16px "Press Start 2P", monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText(`${Math.floor(scoreRef.current / 10)}m`, dimensions.width - 20, 30);
+      // Draw score (gate only)
+      if (enableGlobalTouch) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px "Press Start 2P", monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${Math.floor(scoreRef.current / 10)}m`, dimensions.width - 20, 30);
+      }
 
       // Continue loop
       gameLoopRef.current = requestAnimationFrame(gameLoop);
@@ -333,6 +335,7 @@ export function RunnerGame({ onObstacleCleared, disableSounds = false, enableGlo
     };
   }, [
     dimensions,
+    enableGlobalTouch,
     isPaused,
     isPlaying,
     currentTheme,

@@ -170,7 +170,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
 
   if (isChecking) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-pixel-black/80">
+      <div data-no-jump className="fixed inset-0 z-50 flex items-center justify-center bg-pixel-black/80">
         <div className="text-center">
           <div className="font-pixel text-foamy-green text-xl animate-pulse">
             LOADING...
@@ -202,7 +202,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
   // Login phase - show login form with Bohdi intro
   if (phase === 'login') {
     return (
-      <div className="fixed inset-0 z-50 bg-pixel-black/90 overflow-y-auto">
+      <div data-no-jump className="fixed inset-0 z-50 bg-pixel-black/90 overflow-y-auto">
         <div className="min-h-full flex items-start md:items-center justify-center p-4 py-8">
           <div 
             className="w-full max-w-lg bg-pixel-black border-4 border-foamy-green p-5 md:p-8 my-auto"
