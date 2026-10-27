@@ -12,6 +12,7 @@ interface ElastoState {
   completed: number[];
   recordFinish: (levelIndex: number, ms: number) => FinishResult;
   unlockLevel: (levelIndex: number) => void;
+  resetElasto: () => void;
 }
 
 export const useElastoStore = create<ElastoState>()(
@@ -35,6 +36,7 @@ export const useElastoStore = create<ElastoState>()(
         });
         return { isNewBest, firstClear };
       },
+      resetElasto: () => set({ bestTimes: {}, unlockedLevel: 0, completed: [] }),
     }),
     { name: 'bohdi-elasto' },
   ),

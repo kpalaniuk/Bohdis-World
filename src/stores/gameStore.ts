@@ -109,6 +109,8 @@ export const useGameStore = create<GameState>()(
 
       resetGame: () => {
         set({
+          isUnlocked: false,
+          jumpCount: 0,
           score: 0,
           highScore: 0,
           isPaused: false,
@@ -140,4 +142,3 @@ export const useGameStore = create<GameState>()(
     }
   )
 );
-

@@ -1,5 +1,3 @@
-import { supabase, isSupabaseConfigured } from './supabase';
-
 export type UserRole = 'user' | 'admin' | 'superuser';
 
 export interface SimpleUser {
@@ -11,701 +9,81 @@ export interface SimpleUser {
   can_gift_items: boolean;
 }
 
+export interface AdminUserView extends SimpleUser {
+  last_login_at: string | null;
+  profile?: { id: string; has_completed_gate: boolean };
+  progress?: { coins: number; total_earned: number; high_score: number; unlocked_themes: string[]; unlocked_powerups: string[] };
+  recentActivities?: Array<{ activity_type: string; activity_data: Record<string, unknown>; created_at: string }>;
+}
+
+async function request<T>(url: string, init?: RequestInit): Promise<{ data: T | null; error: string | null }> {
+  try {
+    const response = await fetch(url, { ...init, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...init?.headers } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { data: null, error: data.error || 'Something went wrong' };
+    return { data, error: null };
+  } catch {
+    return { data: null, error: 'Something went wrong' };
+  }
+}
+
 export function isAdmin(user: SimpleUser | null): boolean {
   return user?.role === 'admin' || user?.role === 'superuser';
 }
+export function isSuperuser(user: SimpleUser | null): boolean { return user?.role === 'superuser'; }
 
-export function isSuperuser(user: SimpleUser | null): boolean {
-  return user?.role === 'superuser';
+export async function signUpSimple(username: string, password: string, displayName?: string, code?: string) {
+  const result = await request<{ user: SimpleUser }>('/api/auth/signup', { method: 'POST', body: JSON.stringify({ username, password, displayName, code }) });
+  return { user: result.data?.user || null, error: result.error };
+}
+export async function getAuthConfig(): Promise<{ signupCodeRequired: boolean }> {
+  return (await request<{ signupCodeRequired: boolean }>('/api/auth/config')).data || { signupCodeRequired: false };
+}
+export async function signInSimple(username: string, password: string) {
+  const result = await request<{ user: SimpleUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+  return { user: result.data?.user || null, error: result.error };
+}
+export async function getCurrentUser(): Promise<SimpleUser | null> {
+  return (await request<{ user: SimpleUser | null }>('/api/auth/me')).data?.user || null;
+}
+export async function signOutSimple(): Promise<void> { await request('/api/auth/logout', { method: 'POST' }); }
+export async function getSimpleUserProfile(_userId: string) {
+  return (await request<{ profile: unknown }>('/api/progress')).data?.profile || null;
 }
 
-// Simple hash function for passwords (not cryptographically secure, but sufficient for a kid's game)
-// For production, you'd want bcrypt on a server
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'bohdi_salt_2024');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const inputHash = await hashPassword(password);
-  return inputHash === hash;
-}
-
-export async function signUpSimple(
-  username: string, 
-  password: string, 
-  displayName?: string
-): Promise<{ user: SimpleUser | null; error: string | null }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { user: null, error: 'Database not configured' };
-  }
-
-  // Validate username
-  const cleanUsername = username.toLowerCase().trim();
-  if (cleanUsername.length < 3) {
-    return { user: null, error: 'Username must be at least 3 characters' };
-  }
-  if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
-    return { user: null, error: 'Username can only contain letters, numbers, and underscores' };
-  }
-
-  // Validate password
-  if (password.length < 4) {
-    return { user: null, error: 'Password must be at least 4 characters' };
-  }
-
-  try {
-    // Check if username exists
-    const { data: existing } = await supabase
-      .from('simple_users')
-      .select('id')
-      .eq('username', cleanUsername)
-      .single();
-
-    if (existing) {
-      return { user: null, error: 'Username already taken' };
-    }
-
-    // Hash password and create user
-    const passwordHash = await hashPassword(password);
-    
-    const { data: newUser, error: createError } = await supabase
-      .from('simple_users')
-      .insert({
-        username: cleanUsername,
-        password_hash: passwordHash,
-        display_name: displayName || cleanUsername,
-        role: 'user',
-        can_gift_items: false,
-      })
-      .select('id, username, display_name, created_at, role, can_gift_items')
-      .single();
-
-    if (createError) {
-      console.error('Error creating user:', createError);
-      return { user: null, error: 'Failed to create account' };
-    }
-
-    // Create user profile
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .insert({
-        simple_user_id: newUser.id,
-        username: cleanUsername,
-      })
-      .select()
-      .single();
-
-    // Create initial progress
-    if (profile) {
-      await supabase.from('user_progress').insert({
-        user_id: profile.id,
-        coins: 0,
-        total_earned: 0,
-        high_score: 0,
-        unlocked_themes: ['default'],
-        unlocked_powerups: [],
-      });
-      
-      // Log signup activity
-      try {
-        await supabase.from('user_activities').insert({
-          user_id: profile.id,
-          activity_type: 'signup',
-          activity_data: {},
-        });
-      } catch (err) {
-        // Activity logging is optional, don't fail signup if it fails
-        console.warn('Failed to log signup activity:', err);
-      }
-    }
-
-    return { user: newUser as SimpleUser, error: null };
-  } catch (err) {
-    console.error('Signup error:', err);
-    return { user: null, error: 'Something went wrong' };
-  }
-}
-
-export async function signInSimple(
-  username: string, 
-  password: string
-): Promise<{ user: SimpleUser | null; error: string | null }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { user: null, error: 'Database not configured' };
-  }
-
-  const cleanUsername = username.toLowerCase().trim();
-
-  try {
-    // Get user by username
-    const { data: user, error: fetchError } = await supabase
-      .from('simple_users')
-      .select('id, username, display_name, password_hash, created_at, role, can_gift_items')
-      .eq('username', cleanUsername)
-      .single();
-
-    if (fetchError || !user) {
-      return { user: null, error: 'Invalid username or password' };
-    }
-
-    // Verify password
-    const isValid = await verifyPassword(password, user.password_hash);
-    if (!isValid) {
-      return { user: null, error: 'Invalid username or password' };
-    }
-
-    // Update last login
-    await supabase
-      .from('simple_users')
-      .update({ last_login_at: new Date().toISOString() })
-      .eq('id', user.id);
-
-    // Log login activity (non-blocking)
-    try {
-      const { logActivity } = await import('./activityTracking');
-      logActivity(user.id, 'login').catch(() => {
-        // Silently fail - activity tracking is optional
-      });
-    } catch {
-      // Ignore errors - activity tracking is optional
-    }
-
-    // Return user without password hash
-    const { password_hash: _, ...safeUser } = user;
-    return { user: safeUser as SimpleUser, error: null };
-  } catch (err) {
-    console.error('Sign in error:', err);
-    return { user: null, error: 'Something went wrong' };
-  }
-}
-
-export async function getSimpleUserProfile(userId: string) {
-  if (!isSupabaseConfigured() || !supabase) {
-    return null;
-  }
-
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('simple_user_id', userId)
-    .single();
-
-  return profile;
-}
-
-// Local storage helpers for session management
-const SESSION_KEY = 'bohdi_simple_user';
-
-export function saveSession(user: SimpleUser) {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-  }
-}
-
-export function getSession(): SimpleUser | null {
-  if (typeof window !== 'undefined') {
-    const data = localStorage.getItem(SESSION_KEY);
-    if (data) {
-      try {
-        return JSON.parse(data);
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
-}
-
-export function clearSession() {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(SESSION_KEY);
-  }
-}
-
-// ================================
-// ADMIN FUNCTIONS
-// ================================
-
-export interface AdminUserView {
-  id: string;
-  username: string;
-  display_name: string | null;
-  role: UserRole;
-  can_gift_items: boolean;
-  created_at: string;
-  last_login_at: string | null;
-  profile?: {
-    id: string;
-    has_completed_gate: boolean;
-  };
-  progress?: {
-    coins: number;
-    total_earned: number;
-    high_score: number;
-    unlocked_themes: string[];
-    unlocked_powerups: string[];
-  };
-  recentActivities?: Array<{
-    activity_type: string;
-    activity_data: Record<string, unknown>;
-    created_at: string;
-  }>;
-}
+// Compatibility no-ops: the httpOnly cookie is the sole auth source of truth.
+export function saveSession(_user: SimpleUser): void {}
+export function getSession(): SimpleUser | null { return null; }
+export function clearSession(): void {}
 
 export async function getAllUsers(): Promise<AdminUserView[]> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return [];
-  }
-
-  const db = supabase; // TypeScript knows db is non-null here
-
-  try {
-    const { data: users, error } = await db
-      .from('simple_users')
-      .select(`
-        id,
-        username,
-        display_name,
-        role,
-        can_gift_items,
-        created_at,
-        last_login_at
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error || !users) {
-      console.error('Error fetching users:', error);
-      return [];
-    }
-
-    // Fetch profiles, progress, and recent activities for each user
-    const usersWithDetails: AdminUserView[] = await Promise.all(
-      users.map(async (user) => {
-        const { data: profile } = await db
-          .from('user_profiles')
-          .select('id, has_completed_gate')
-          .eq('simple_user_id', user.id)
-          .single();
-
-        let progress = null;
-        let recentActivities = null;
-        if (profile) {
-          const { data: progressData } = await db
-            .from('user_progress')
-            .select('coins, total_earned, high_score, unlocked_themes, unlocked_powerups')
-            .eq('user_id', profile.id)
-            .single();
-          progress = progressData;
-          
-          // Get recent activities
-          const { data: activities } = await db
-            .from('user_activities')
-            .select('activity_type, activity_data, created_at')
-            .eq('user_id', profile.id)
-            .order('created_at', { ascending: false })
-            .limit(10);
-          recentActivities = activities || [];
-        }
-
-        return {
-          ...user,
-          profile: profile || undefined,
-          progress: progress || undefined,
-          recentActivities: recentActivities || undefined,
-        };
-      })
-    );
-
-    return usersWithDetails;
-  } catch (err) {
-    console.error('Error in getAllUsers:', err);
-    return [];
-  }
+  return (await request<{ users: AdminUserView[] }>('/api/admin/users')).data?.users || [];
 }
-
-export async function giftCoins(
-  adminUser: SimpleUser,
-  targetUserId: string,
-  amount: number,
-  reason?: string
-): Promise<{ success: boolean; error: string | null; newBalance?: number }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { success: false, error: 'Database not configured' };
-  }
-
-  // Verify admin has permission
-  if (!adminUser.can_gift_items && !isAdmin(adminUser)) {
-    return { success: false, error: 'You do not have permission to gift coins' };
-  }
-
-  try {
-    // Get the user's profile
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('id')
-      .eq('simple_user_id', targetUserId)
-      .single();
-
-    if (!profile) {
-      return { success: false, error: 'User profile not found' };
-    }
-
-    // Get current progress
-    const { data: progress } = await supabase
-      .from('user_progress')
-      .select('coins, total_earned')
-      .eq('user_id', profile.id)
-      .single();
-
-    if (!progress) {
-      return { success: false, error: 'User progress not found' };
-    }
-
-    const newCoins = Math.max(0, progress.coins + amount);
-    const newTotalEarned = amount > 0 ? progress.total_earned + amount : progress.total_earned;
-
-    // Update progress
-    const { error: updateError } = await supabase
-      .from('user_progress')
-      .update({
-        coins: newCoins,
-        total_earned: newTotalEarned,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', profile.id);
-
-    if (updateError) {
-      console.error('Error gifting coins:', updateError);
-      return { success: false, error: 'Failed to gift coins' };
-    }
-
-    console.log(`Admin ${adminUser.username} gifted ${amount} coins to user ${targetUserId}. Reason: ${reason || 'N/A'}`);
-    return { success: true, error: null, newBalance: newCoins };
-  } catch (err) {
-    console.error('Error in giftCoins:', err);
-    return { success: false, error: 'Something went wrong' };
-  }
+export async function giftCoins(_adminUser: SimpleUser, targetUserId: string, amount: number, reason?: string) {
+  const result = await request<{ success: boolean; newBalance?: number }>('/api/admin/gift-coins', { method: 'POST', body: JSON.stringify({ targetUserId, amount, reason }) });
+  return { success: !!result.data?.success, error: result.error, newBalance: result.data?.newBalance };
 }
-
-export async function updateUserRole(
-  adminUser: SimpleUser,
-  targetUserId: string,
-  newRole: UserRole
-): Promise<{ success: boolean; error: string | null }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { success: false, error: 'Database not configured' };
-  }
-
-  // Only superusers can change roles
-  if (!isSuperuser(adminUser)) {
-    return { success: false, error: 'Only superusers can change user roles' };
-  }
-
-  // Prevent changing own role
-  if (targetUserId === adminUser.id) {
-    return { success: false, error: 'You cannot change your own role' };
-  }
-
-  try {
-    const { error } = await supabase
-      .from('simple_users')
-      .update({ role: newRole })
-      .eq('id', targetUserId);
-
-    if (error) {
-      console.error('Error updating role:', error);
-      return { success: false, error: 'Failed to update role' };
-    }
-
-    return { success: true, error: null };
-  } catch (err) {
-    console.error('Error in updateUserRole:', err);
-    return { success: false, error: 'Something went wrong' };
-  }
+export async function updateUserRole(_adminUser: SimpleUser, targetUserId: string, newRole: UserRole) {
+  const result = await request<{ success: boolean }>('/api/admin/role', { method: 'PUT', body: JSON.stringify({ targetUserId, role: newRole }) });
+  return { success: !!result.data?.success, error: result.error };
 }
-
-export async function resetUserPassword(
-  adminUser: SimpleUser,
-  targetUserId: string,
-  newPassword: string
-): Promise<{ success: boolean; error: string | null }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { success: false, error: 'Database not configured' };
-  }
-
-  // Only admins/superusers can reset passwords
-  if (!isAdmin(adminUser)) {
-    return { success: false, error: 'You do not have permission to reset passwords' };
-  }
-
-  if (newPassword.length < 4) {
-    return { success: false, error: 'Password must be at least 4 characters' };
-  }
-
-  try {
-    const passwordHash = await hashPassword(newPassword);
-    
-    const { error } = await supabase
-      .from('simple_users')
-      .update({ password_hash: passwordHash })
-      .eq('id', targetUserId);
-
-    if (error) {
-      console.error('Error resetting password:', error);
-      return { success: false, error: 'Failed to reset password' };
-    }
-
-    return { success: true, error: null };
-  } catch (err) {
-    console.error('Error in resetUserPassword:', err);
-    return { success: false, error: 'Something went wrong' };
-  }
+export async function resetUserPassword(_adminUser: SimpleUser, targetUserId: string, newPassword: string) {
+  const result = await request<{ success: boolean }>('/api/admin/reset-password', { method: 'POST', body: JSON.stringify({ targetUserId, newPassword }) });
+  return { success: !!result.data?.success, error: result.error };
 }
-
-export async function updateDisplayName(
-  userId: string,
-  newDisplayName: string
-): Promise<{ success: boolean; error: string | null }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { success: false, error: 'Database not configured' };
-  }
-
-  if (newDisplayName.trim().length < 1) {
-    return { success: false, error: 'Display name cannot be empty' };
-  }
-
-  try {
-    const { error } = await supabase
-      .from('simple_users')
-      .update({ display_name: newDisplayName.trim() })
-      .eq('id', userId);
-
-    if (error) {
-      console.error('Error updating display name:', error);
-      return { success: false, error: 'Failed to update display name' };
-    }
-
-    return { success: true, error: null };
-  } catch (err) {
-    console.error('Error in updateDisplayName:', err);
-    return { success: false, error: 'Something went wrong' };
-  }
+export async function updateDisplayName(_userId: string, newDisplayName: string) {
+  const result = await request<{ success: boolean }>('/api/auth/display-name', { method: 'PUT', body: JSON.stringify({ displayName: newDisplayName }) });
+  return { success: !!result.data?.success, error: result.error };
 }
-
-export async function changePassword(
-  userId: string,
-  currentPassword: string,
-  newPassword: string
-): Promise<{ success: boolean; error: string | null }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { success: false, error: 'Database not configured' };
-  }
-
-  if (newPassword.length < 4) {
-    return { success: false, error: 'Password must be at least 4 characters' };
-  }
-
-  try {
-    // Get current password hash
-    const { data: user } = await supabase
-      .from('simple_users')
-      .select('password_hash')
-      .eq('id', userId)
-      .single();
-
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Verify current password
-    const isValid = await verifyPassword(currentPassword, user.password_hash);
-    if (!isValid) {
-      return { success: false, error: 'Current password is incorrect' };
-    }
-
-    // Update to new password
-    const newHash = await hashPassword(newPassword);
-    const { error } = await supabase
-      .from('simple_users')
-      .update({ password_hash: newHash })
-      .eq('id', userId);
-
-    if (error) {
-      console.error('Error changing password:', error);
-      return { success: false, error: 'Failed to change password' };
-    }
-
-    return { success: true, error: null };
-  } catch (err) {
-    console.error('Error in changePassword:', err);
-    return { success: false, error: 'Something went wrong' };
-  }
+export async function changePassword(_userId: string, currentPassword: string, newPassword: string) {
+  const result = await request<{ success: boolean }>('/api/auth/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
+  return { success: !!result.data?.success, error: result.error };
 }
-
-export async function unlockItemForUser(
-  adminUser: SimpleUser,
-  targetUserId: string,
-  itemType: 'theme' | 'powerup',
-  itemId: string
-): Promise<{ success: boolean; error: string | null }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { success: false, error: 'Database not configured' };
-  }
-
-  if (!adminUser.can_gift_items && !isAdmin(adminUser)) {
-    return { success: false, error: 'You do not have permission to gift items' };
-  }
-
-  try {
-    // Get user's profile
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('id')
-      .eq('simple_user_id', targetUserId)
-      .single();
-
-    if (!profile) {
-      return { success: false, error: 'User profile not found' };
-    }
-
-    // Get current progress
-    const { data: progress } = await supabase
-      .from('user_progress')
-      .select('unlocked_themes, unlocked_powerups')
-      .eq('user_id', profile.id)
-      .single();
-
-    if (!progress) {
-      return { success: false, error: 'User progress not found' };
-    }
-
-    const updateData: Record<string, string[]> = {};
-    
-    if (itemType === 'theme') {
-      const themes = progress.unlocked_themes || [];
-      if (!themes.includes(itemId)) {
-        updateData.unlocked_themes = [...themes, itemId];
-      } else {
-        return { success: true, error: null }; // Already unlocked
-      }
-    } else {
-      const powerups = progress.unlocked_powerups || [];
-      if (!powerups.includes(itemId)) {
-        updateData.unlocked_powerups = [...powerups, itemId];
-      } else {
-        return { success: true, error: null }; // Already unlocked
-      }
-    }
-
-    const { error } = await supabase
-      .from('user_progress')
-      .update({
-        ...updateData,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', profile.id);
-
-    if (error) {
-      console.error('Error unlocking item:', error);
-      return { success: false, error: 'Failed to unlock item' };
-    }
-
-    return { success: true, error: null };
-  } catch (err) {
-    console.error('Error in unlockItemForUser:', err);
-    return { success: false, error: 'Something went wrong' };
-  }
+export async function unlockItemForUser(_adminUser: SimpleUser, targetUserId: string, itemType: 'theme' | 'powerup', itemId: string) {
+  const result = await request<{ success: boolean }>('/api/admin/unlock-item', { method: 'POST', body: JSON.stringify({ targetUserId, itemType, itemId }) });
+  return { success: !!result.data?.success, error: result.error };
 }
-
-export async function deleteUser(
-  adminUser: SimpleUser,
-  targetUserId: string
-): Promise<{ success: boolean; error: string | null }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return { success: false, error: 'Database not configured' };
-  }
-
-  // Only admins/superusers can delete users
-  if (!isAdmin(adminUser)) {
-    return { success: false, error: 'You do not have permission to delete users' };
-  }
-
-  // Prevent deleting yourself
-  if (targetUserId === adminUser.id) {
-    return { success: false, error: 'You cannot delete your own account' };
-  }
-
-  try {
-    // Get target user to check their role
-    const { data: targetUser, error: fetchError } = await supabase
-      .from('simple_users')
-      .select('id, role')
-      .eq('id', targetUserId)
-      .single();
-
-    if (fetchError || !targetUser) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Only superusers can delete other superusers
-    if (targetUser.role === 'superuser' && !isSuperuser(adminUser)) {
-      return { success: false, error: 'Only superusers can delete superuser accounts' };
-    }
-
-    // Get user profile first
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('id')
-      .eq('simple_user_id', targetUserId)
-      .single();
-
-    // Delete in order: user_progress, calculation_history, math_history, user_profiles, simple_users
-    if (profile) {
-      // Delete user progress
-      await supabase
-        .from('user_progress')
-        .delete()
-        .eq('user_id', profile.id);
-
-      // Delete calculation history (if table exists)
-      await supabase
-        .from('calculation_history')
-        .delete()
-        .eq('user_id', profile.id);
-
-      // Delete math history (if table exists)
-      await supabase
-        .from('math_history')
-        .delete()
-        .eq('user_id', profile.id);
-
-      // Delete user profile
-      await supabase
-        .from('user_profiles')
-        .delete()
-        .eq('id', profile.id);
-    }
-
-    // Finally, delete the user account
-    const { error: deleteError } = await supabase
-      .from('simple_users')
-      .delete()
-      .eq('id', targetUserId);
-
-    if (deleteError) {
-      console.error('Error deleting user:', deleteError);
-      return { success: false, error: 'Failed to delete user account' };
-    }
-
-    console.log(`Admin ${adminUser.username} deleted user ${targetUserId}`);
-    return { success: true, error: null };
-  } catch (err) {
-    console.error('Error in deleteUser:', err);
-    return { success: false, error: 'Something went wrong' };
-  }
+export async function deleteUser(_adminUser: SimpleUser, targetUserId: string) {
+  const result = await request<{ success: boolean }>('/api/admin/delete-user', { method: 'DELETE', body: JSON.stringify({ targetUserId }) });
+  return { success: !!result.data?.success, error: result.error };
 }
-

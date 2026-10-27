@@ -6,6 +6,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { loadUserProgress, saveUserProgress, createAuthUserId } from '@/lib/syncProgress';
 import confetti from 'canvas-confetti';
+import { getAuthConfig } from '@/lib/simpleAuth';
 
 interface GateOverlayProps {
   onUnlock: () => void;
@@ -31,8 +32,14 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [signupCode, setSignupCode] = useState('');
+  const [signupCodeRequired, setSignupCodeRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    getAuthConfig().then(config => setSignupCodeRequired(config.signupCodeRequired));
+  }, []);
 
   // Create auth user ID for database operations
   const authUserId = useMemo(() => {
@@ -110,7 +117,7 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
           completeAndUnlock();
         }
       } else {
-        const result = await signUpWithUsername(username, password, displayName || undefined);
+        const result = await signUpWithUsername(username, password, displayName || undefined, signupCode || undefined);
         if (result.error) {
           setError(result.error);
         } else {
@@ -278,15 +285,29 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
                 placeholder="••••••••"
                 className="w-full px-3 py-2 md:px-4 md:py-3 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd text-base md:text-lg focus:border-foamy-green focus:outline-none placeholder:text-gray-500 transition-colors"
                 required
-                minLength={4}
+                minLength={authMode === 'signup' ? 6 : 4}
                 autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
               />
               {authMode === 'signup' && (
                 <p className="mt-1 font-lcd text-gray-500 text-xs">
-                  At least 4 characters
+                  At least 6 characters
                 </p>
               )}
             </div>
+
+            {authMode === 'signup' && signupCodeRequired && (
+              <div>
+                <label className="block font-lcd text-gray-300 mb-1 md:mb-2 text-xs md:text-sm">SIGNUP CODE</label>
+                <input
+                  type="password"
+                  value={signupCode}
+                  onChange={(event) => setSignupCode(event.target.value)}
+                  className="w-full px-3 py-2 md:px-4 md:py-3 bg-pixel-black border-4 border-pixel-shadow text-white font-lcd text-base md:text-lg focus:border-foamy-green focus:outline-none"
+                  required
+                  autoComplete="off"
+                />
+              </div>
+            )}
 
             {/* Error Message */}
             {error && (

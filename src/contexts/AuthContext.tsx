@@ -4,9 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { 
   SimpleUser, 
   UserRole,
-  getSession, 
-  saveSession, 
-  clearSession,
+  getCurrentUser,
+  signOutSimple,
   signInSimple,
   signUpSimple,
   isAdmin as checkIsAdmin,
@@ -22,6 +21,8 @@ import {
 import { useCoinStore } from '@/stores/coinStore';
 import { useGameStore, GameTheme, PowerUp } from '@/stores/gameStore';
 import { useUnlockStore } from '@/stores/unlockStore';
+import { useCharacterStore } from '@/stores/characterStore';
+import { useElastoStore } from '@/stores/elastoStore';
 
 interface AuthUser {
   id: string;
@@ -45,7 +46,7 @@ interface AuthContextType {
   
   // Simple auth methods
   signInWithUsername: (username: string, password: string) => Promise<{ error: string | null }>;
-  signUpWithUsername: (username: string, password: string, displayName?: string) => Promise<{ error: string | null }>;
+  signUpWithUsername: (username: string, password: string, displayName?: string, code?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -64,11 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Load simple session on mount
   useEffect(() => {
-    const session = getSession();
-    if (session) {
-      setSimpleUser(session);
-    }
-    setSimpleLoaded(true);
+    let active = true;
+    getCurrentUser()
+      .then((session) => { if (active) setSimpleUser(session); })
+      .finally(() => { if (active) setSimpleLoaded(true); });
+    return () => { active = false; };
   }, []);
 
   // Determine current auth state
@@ -167,7 +168,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithUsername = useCallback(async (username: string, password: string) => {
     const result = await signInSimple(username, password);
     if (result.user) {
-      saveSession(result.user);
       setSimpleUser(result.user);
       // Reset sync ref to trigger sync for new user
       hasSyncedRef.current = null;
@@ -176,10 +176,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: result.error || 'Failed to sign in' };
   }, []);
 
-  const signUpWithUsername = useCallback(async (username: string, password: string, displayName?: string) => {
-    const result = await signUpSimple(username, password, displayName);
+  const signUpWithUsername = useCallback(async (username: string, password: string, displayName?: string, code?: string) => {
+    const result = await signUpSimple(username, password, displayName, code);
     if (result.user) {
-      saveSession(result.user);
       setSimpleUser(result.user);
       // Reset sync ref to trigger sync for new user
       hasSyncedRef.current = null;
@@ -192,11 +191,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Reset sync ref on sign out
     hasSyncedRef.current = null;
     
-    if (simpleUser) {
-      clearSession();
-      setSimpleUser(null);
-    }
-  }, [simpleUser]);
+    await signOutSimple();
+    useCoinStore.getState().resetCoins();
+    useGameStore.getState().resetGame();
+    useUnlockStore.getState().resetUnlocks();
+    useCharacterStore.getState().resetCharacter();
+    useElastoStore.getState().resetElasto();
+    setSimpleUser(null);
+  }, []);
 
   // Role helpers
   const isAdmin = checkIsAdmin(simpleUser);
