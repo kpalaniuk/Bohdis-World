@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getAuthConfig } from '@/lib/simpleAuth';
 
 interface SimpleAuthFormProps {
   mode: 'signin' | 'signup';
@@ -15,8 +16,14 @@ export function SimpleAuthForm({ mode, onModeChange, onSuccess }: SimpleAuthForm
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [signupCode, setSignupCode] = useState('');
+  const [signupCodeRequired, setSignupCodeRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    getAuthConfig().then(config => setSignupCodeRequired(config.signupCodeRequired));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +39,7 @@ export function SimpleAuthForm({ mode, onModeChange, onSuccess }: SimpleAuthForm
           onSuccess?.();
         }
       } else {
-        const result = await signUpWithUsername(username, password, displayName || undefined);
+        const result = await signUpWithUsername(username, password, displayName || undefined, signupCode || undefined);
         if (result.error) {
           setError(result.error);
         } else {
@@ -115,15 +122,29 @@ export function SimpleAuthForm({ mode, onModeChange, onSuccess }: SimpleAuthForm
           placeholder="••••••••"
           className={inputClasses}
           required
-          minLength={4}
+          minLength={mode === 'signup' ? 6 : 4}
           autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
         />
         {mode === 'signup' && (
           <p className="mt-1 font-lcd text-gray-500 text-xs">
-            At least 4 characters
+            At least 6 characters
           </p>
         )}
       </div>
+
+      {mode === 'signup' && signupCodeRequired && (
+        <div>
+          <label className="block font-lcd text-gray-300 mb-2 text-sm">SIGNUP CODE</label>
+          <input
+            type="password"
+            value={signupCode}
+            onChange={(event) => setSignupCode(event.target.value)}
+            className={inputClasses}
+            required
+            autoComplete="off"
+          />
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (

@@ -15,8 +15,8 @@ import {
 import { PixelCard } from '@/components/ui/PixelCard';
 import { PixelButton } from '@/components/ui/PixelButton';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAllUsers, AdminUserView, UserRole } from '@/lib/simpleAuth';
-import { getUserGameSettings, setUserGameSettings, getGameSettingsForUser, GameSettingsConfig } from '@/lib/gameSettings';
+import { getAllUsers, AdminUserView } from '@/lib/simpleAuth';
+import { setUserGameSettings, getAdminGameSettingsForUser, GameSettingsConfig } from '@/lib/gameSettings';
 
 const GAMES = [
   { id: 'surfrider', name: 'Surfrider', icon: '🏄' },
@@ -68,7 +68,7 @@ export default function GameSettingsPage() {
     if (!selectedUserId) return;
     
     try {
-      const gameSettings = await getGameSettingsForUser(selectedUserId, selectedGame);
+      const gameSettings = await getAdminGameSettingsForUser(selectedUserId, selectedGame);
       if (gameSettings) {
         setSettings(gameSettings as GameSettingsConfig);
       } else {
@@ -527,4 +527,3 @@ function SettingSlider({ label, value, min, max, step = 1, suffix = '', onChange
     </div>
   );
 }
-

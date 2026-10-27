@@ -1,11 +1,24 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Simple middleware - no Clerk, just pass through all requests
-// Authentication is handled client-side via useAuth hook and simple auth
 export default function middleware(request: NextRequest) {
-  // Allow all requests to pass through
-  // Auth is handled at the component level using the AuthContext
+  if (request.nextUrl.pathname.startsWith('/api/') && !['GET', 'HEAD'].includes(request.method)) {
+    const contentType = request.headers.get('content-type')?.toLowerCase() || '';
+    if (!contentType.startsWith('application/json')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const origin = request.headers.get('origin');
+    if (origin) {
+      try {
+        if (new URL(origin).host !== request.nextUrl.host) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      } catch {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+  }
   return NextResponse.next();
 }
 

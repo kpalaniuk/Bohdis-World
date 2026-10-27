@@ -76,7 +76,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
   }, []);
 
   const { currentTheme, activePowerUps, deactivatePowerUp, soundEnabled } = useGameStore();
-  const { usePowerUp, getPowerUpCount } = useUnlockStore();
+  const { usePowerUp: consumePowerUp, getPowerUpCount } = useUnlockStore();
   const { addCoins } = useCoinStore();
   const { selectedCharacter, getStrengths } = useCharacterStore();
   
@@ -142,7 +142,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
 
   // Use power-up
   const activatePowerUpFromInventory = useCallback((powerUp: PowerUp) => {
-    if (getPowerUpCount(powerUp) > 0 && usePowerUp(powerUp)) {
+    if (getPowerUpCount(powerUp) > 0 && consumePowerUp(powerUp)) {
       // Activate the power-up in game store
       useGameStore.getState().activatePowerUp(powerUp);
       
@@ -152,7 +152,7 @@ export function GameCanvas({ onGameOver, onScoreUpdate }: GameCanvasProps) {
         deactivatePowerUp(powerUp);
       }, duration);
     }
-  }, [getPowerUpCount, usePowerUp, deactivatePowerUp]);
+  }, [getPowerUpCount, consumePowerUp, deactivatePowerUp]);
 
   // Jump handler - only double jump when explicitly pressed again
   const handleJump = useCallback(() => {
@@ -715,4 +715,3 @@ function drawOverlay(
 }
 
 export default GameCanvas;
-

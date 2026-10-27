@@ -14,7 +14,8 @@ import { useCoinStore } from '@/stores/coinStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useUnlockStore } from '@/stores/unlockStore';
 import { useCharacterStore, CHARACTERS, ACCESSORIES } from '@/stores/characterStore';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { updateDisplayName } from '@/lib/simpleAuth';
+import { getMathAttempts } from '@/lib/syncProgress';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -53,26 +54,11 @@ export default function ProfilePage() {
 
     // Load math stats from database
     async function loadStats() {
-      if (!isSupabaseConfigured() || !supabase || !user) return;
+      if (!user) return;
 
       try {
-        // Get user profile
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('id')
-          .eq('simple_user_id', user.id)
-          .single();
-
-        if (profile) {
-          // Get math history stats
-          const { data: mathHistory } = await supabase
-            .from('math_history')
-            .select('is_correct, created_at')
-            .eq('user_id', profile.id)
-            .order('created_at', { ascending: false })
-            .limit(100);
-
-          if (mathHistory) {
+        const mathHistory = await getMathAttempts(100);
+        if (mathHistory) {
             const total = mathHistory.length;
             const correct = mathHistory.filter(h => h.is_correct).length;
             
@@ -100,7 +86,6 @@ export default function ProfilePage() {
             }
 
             setRecentActivity(activity);
-          }
         }
       } catch (err) {
         console.error('Error loading stats:', err);
@@ -111,8 +96,8 @@ export default function ProfilePage() {
   }, [user]);
 
   const handleSave = async () => {
-    if (!user || !isSupabaseConfigured() || !supabase) {
-      setError('Cannot save - database not configured');
+    if (!user) {
+      setError('Cannot save profile');
       return;
     }
 
@@ -121,17 +106,8 @@ export default function ProfilePage() {
     setSaveSuccess(false);
 
     try {
-      if (authMethod === 'simple') {
-        // Update simple user display name
-        const { error: updateError } = await supabase
-          .from('simple_users')
-          .update({ display_name: displayName.trim() || user.username })
-          .eq('id', user.id);
-
-        if (updateError) {
-          throw updateError;
-        }
-      }
+      const result = await updateDisplayName(user.id, displayName.trim() || user.username || 'Player');
+      if (!result.success) throw new Error(result.error || 'Failed to save profile');
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);

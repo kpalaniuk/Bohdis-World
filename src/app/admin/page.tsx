@@ -167,8 +167,8 @@ export default function AdminPage() {
 
   const handleResetPassword = async (targetUserId: string) => {
     const newPassword = newPasswords[targetUserId];
-    if (!newPassword || newPassword.length < 4) {
-      showMessage('error', 'Password must be at least 4 characters');
+    if (!newPassword || newPassword.length < 6) {
+      showMessage('error', 'Password must be at least 6 characters');
       return;
     }
     
@@ -746,4 +746,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
