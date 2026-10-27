@@ -13,6 +13,8 @@
     "@clerk/nextjs": "^6.36.5",
     "@supabase/supabase-js": "^2.89.0",
     "canvas-confetti": "^1.9.4",
+    "elmajs": "^1.2.4",
+    "fflate": "^0.8.2",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
     "react": "19.2.3",
