@@ -3,6 +3,8 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useSkyClimberStore } from '@/stores/skyClimberStore';
 import { useCoinStore } from '@/stores/coinStore';
+import { useGameStore } from '@/stores/gameStore';
+import { playSound } from '@/lib/sounds';
 import confetti from 'canvas-confetti';
 
 // ============================================
@@ -588,6 +590,7 @@ export function SkyClimberCanvas({ onGameOver, onVictory }: SkyClimberCanvasProp
     reachTop,
   } = useSkyClimberStore();
   const { addCoins } = useCoinStore();
+  const { soundEnabled } = useGameStore();
 
   // Initialize level
   useEffect(() => {

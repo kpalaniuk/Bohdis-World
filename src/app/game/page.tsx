@@ -8,7 +8,8 @@ import { useGameStore, GameTheme, PowerUp } from '@/stores/gameStore';
 import { useSkyClimberStore } from '@/stores/skyClimberStore';
 import { useUnlockStore } from '@/stores/unlockStore';
 import { useCoinStore } from '@/stores/coinStore';
-import { Zap, Shield, Timer, Palette, Trophy, Coins, Star, HelpCircle, Mountain, Waves, ArrowLeft, Square, Rocket } from 'lucide-react';
+import { useElastoStore } from '@/stores/elastoStore';
+import { Zap, Shield, Timer, Palette, Trophy, Coins, Star, HelpCircle, Mountain, Waves, ArrowLeft, Square, Rocket, Bike } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { GameInstructions } from '@/components/game/GameInstructions';
 
@@ -49,7 +50,16 @@ const AsteroidsCanvas = dynamic(() => import('@/components/game/AsteroidsCanvas'
   ),
 });
 
-type GameType = 'select' | 'surf-runner' | 'sky-climber' | 'brick-breaker' | 'asteroids';
+const ElastoBikeCanvas = dynamic(() => import('@/components/game/ElastoBikeCanvas'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[540px] border-4 border-pixel-black bg-ocean-blue flex items-center justify-center">
+      <span className="font-pixel text-foamy-green animate-pulse">LOADING ELASTO BIKE...</span>
+    </div>
+  ),
+});
+
+type GameType = 'select' | 'surf-runner' | 'sky-climber' | 'brick-breaker' | 'asteroids' | 'elasto-bike';
 
 const THEMES: { id: GameTheme; name: string; price: number; colors: string[] }[] = [
   { id: 'beach', name: 'Beach Day', price: 0, colors: ['#87CEEB', '#4A90D9', '#f5e6c8'] },
@@ -73,8 +83,9 @@ export default function GamePage() {
 
   const { currentTheme, setTheme, activePowerUps, activatePowerUp, deactivatePowerUp, highScore: storeHighScore, setHighScore: setStoreHighScore } = useGameStore();
   const { highestAltitude, timesReachedTop } = useSkyClimberStore();
-  const { unlockedThemes, unlockedPowerUps, unlockTheme, buyPowerUp, getPowerUpCount } = useUnlockStore();
+  const { unlockedThemes, unlockTheme, buyPowerUp, getPowerUpCount } = useUnlockStore();
   const { coins, spendCoins } = useCoinStore();
+  const elastoCompleted = useElastoStore((state) => state.completed.length);
 
   useEffect(() => {
     setHighScore(storeHighScore);
@@ -290,6 +301,32 @@ export default function GamePage() {
                 </div>
               </PixelCard>
             </button>
+
+            {/* Elasto Bike Card */}
+            <button
+              onClick={() => setCurrentGame('elasto-bike')}
+              className="group"
+            >
+              <PixelCard
+                variant="solid"
+                padding="lg"
+                className="h-full transition-all hover:scale-105 hover:border-foamy-green cursor-pointer"
+              >
+                <div className="text-center">
+                  <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-ocean-blue to-sunset-orange rounded-lg flex items-center justify-center border-4 border-pixel-black">
+                    <Bike className="w-12 h-12 text-white" />
+                  </div>
+                  <h2 className="font-pixel text-foamy-green text-lg mb-1">ELASTO BIKE</h2>
+                  <p className="font-pixel text-yellow-300 text-[10px] mb-2">{elastoCompleted}/10 LEVELS CLEARED</p>
+                  <p className="font-lcd text-gray-400 text-sm mb-4">
+                    Ride the elastic motorbike! Grab every apple, then touch the flower.
+                  </p>
+                  <div className="mt-4 font-pixel text-foamy-green text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    ▶ PLAY
+                  </div>
+                </div>
+              </PixelCard>
+            </button>
           </div>
 
           {/* Shop Button */}
@@ -307,7 +344,6 @@ export default function GamePage() {
             coins={coins}
             currentTheme={currentTheme}
             unlockedThemes={unlockedThemes}
-            activePowerUps={activePowerUps}
             onClose={() => setShowShop(false)}
             onBuyTheme={handleBuyTheme}
             onBuyPowerUp={handleBuyPowerUp}
@@ -435,7 +471,6 @@ export default function GamePage() {
               coins={coins}
               currentTheme={currentTheme}
               unlockedThemes={unlockedThemes}
-              activePowerUps={activePowerUps}
               onClose={() => setShowShop(false)}
               onBuyTheme={handleBuyTheme}
               onBuyPowerUp={handleBuyPowerUp}
@@ -587,7 +622,7 @@ export default function GamePage() {
             </div>
             <div className="mt-4 text-center">
               <p className="font-lcd text-gray-400 text-xs">
-                💡 Type "bohdiiscool" during gameplay for a special surprise!
+                💡 Type &quot;bohdiiscool&quot; during gameplay for a special surprise!
               </p>
             </div>
           </PixelCard>
@@ -665,6 +700,58 @@ export default function GamePage() {
     );
   }
 
+  // Elasto Bike Game
+  if (currentGame === 'elasto-bike') {
+    return (
+      <div className="min-h-screen p-4 md:p-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center gap-4 mb-6">
+            <button
+              onClick={() => setCurrentGame('select')}
+              className="flex items-center gap-2 bg-pixel-shadow px-4 py-2 border-2 border-ocean-blue hover:border-foamy-green hover:text-foamy-green transition-colors font-pixel text-xs"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              BACK
+            </button>
+            <div className="flex-1 text-center">
+              <h1
+                className="font-pixel text-foamy-green text-xl md:text-2xl"
+                style={{ textShadow: '3px 3px 0px #2d2d2d' }}
+              >
+                ELASTO BIKE
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex justify-center gap-4 mb-6">
+            <div className="flex items-center gap-2 bg-pixel-black/80 px-4 py-2 border-2 border-pixel-shadow">
+              <span className="text-yellow-400">🪙</span>
+              <span className="font-pixel text-yellow-400 text-xs">{coins}</span>
+            </div>
+          </div>
+
+          <div className="flex justify-center mb-6">
+            <ElastoBikeCanvas />
+          </div>
+
+          <PixelCard variant="glass" padding="md" className="max-w-4xl mx-auto mb-6">
+            <h3 className="font-pixel text-foamy-green text-xs mb-3 text-center">CONTROLS</h3>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 font-lcd text-gray-300 text-sm">
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">↑ / W</span><span>Gas</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">↓ / S</span><span>Brake</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">◀ / A</span><span>Lean back</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">▶ / D</span><span>Lean forward</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">SPACE</span><span>Turn around</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">R</span><span>Restart</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">ESC</span><span>Level list</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">ENTER</span><span>Start / next</span></div>
+            </div>
+          </PixelCard>
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -673,7 +760,6 @@ function ShopModal({
   coins,
   currentTheme,
   unlockedThemes,
-  activePowerUps,
   onClose,
   onBuyTheme,
   onBuyPowerUp,
@@ -683,7 +769,6 @@ function ShopModal({
   coins: number;
   currentTheme: GameTheme;
   unlockedThemes: GameTheme[];
-  activePowerUps: PowerUp[];
   onClose: () => void;
   onBuyTheme: (theme: GameTheme, price: number) => void;
   onBuyPowerUp: (powerUp: PowerUp, price: number) => void;
