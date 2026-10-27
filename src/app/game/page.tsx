@@ -739,8 +739,9 @@ export default function GamePage() {
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 font-lcd text-gray-300 text-sm">
               <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">↑ / W</span><span>Gas</span></div>
               <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">↓ / S</span><span>Brake</span></div>
-              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">◀ / A</span><span>Lean back</span></div>
-              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">▶ / D</span><span>Lean forward</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">◀ / ▶</span><span>Built-in: Lean back / forward</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">◀ / ▶</span><span>Elma: Volt (tap)</span></div>
+              <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">+ / −</span><span>Zoom</span></div>
               <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">SPACE</span><span>Turn around</span></div>
               <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">R</span><span>Restart</span></div>
               <div className="flex items-center gap-2"><span className="bg-pixel-shadow px-3 py-1 border border-gray-600 font-pixel text-xs">ESC</span><span>Level list</span></div>

@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const migrations = ['000_full_schema.sql', '001_bohdi_claim.sql'].map(file => ({
+const migrations = ['000_full_schema.sql', '001_bohdi_claim.sql', '002_elma_levels.sql'].map(file => ({
   file,
   sql: readFileSync(resolve(process.cwd(), 'migrations', file), 'utf8'),
 }));

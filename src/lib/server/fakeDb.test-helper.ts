@@ -43,12 +43,21 @@ class FakeQuery implements PromiseLike<{ data: any; error: any }> {
   private values: Row | Row[] | null = null;
   private filters: Array<(row: Row) => boolean> = [];
   private maximum: number | null = null;
+  private rangeStart: number | null = null;
+  private rangeEnd: number | null = null;
+  private countRequested = false;
+  private headOnly = false;
   private projection = '*';
   private conflictColumn: string | null = null;
   private ignoreDuplicates = false;
 
   constructor(private tables: Record<string, Row[]>, private table: string) {}
-  select(columns = '*') { this.projection = columns; return this; }
+  select(columns = '*', options?: { count?: string; head?: boolean }) {
+    this.projection = columns;
+    this.countRequested = options?.count === 'exact';
+    this.headOnly = Boolean(options?.head);
+    return this;
+  }
   insert(values: Row | Row[]) { this.operation = 'insert'; this.values = values; return this; }
   upsert(values: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }) {
     this.operation = 'upsert';
@@ -64,6 +73,7 @@ class FakeQuery implements PromiseLike<{ data: any; error: any }> {
   lt(column: string, value: unknown) { this.filters.push(row => row[column] < (value as any)); return this; }
   order(_column: string, _options?: unknown) { return this; }
   limit(value: number) { this.maximum = value; return this; }
+  range(start: number, end: number) { this.rangeStart = start; this.rangeEnd = end; return this; }
   single() { return Promise.resolve(this.execute(true)); }
   then<TResult1 = { data: any; error: any }, TResult2 = never>(
     onfulfilled?: ((value: { data: any; error: any }) => TResult1 | PromiseLike<TResult1>) | null,
@@ -111,10 +121,13 @@ class FakeQuery implements PromiseLike<{ data: any; error: any }> {
       return { data: single ? deleted[0] || null : deleted, error: null };
     }
     let selected = rows.filter(matches);
+    const count = this.countRequested ? selected.length : null;
+    if (this.rangeStart !== null && this.rangeEnd !== null) selected = selected.slice(this.rangeStart, this.rangeEnd + 1);
     if (this.maximum !== null) selected = selected.slice(0, this.maximum);
+    if (this.headOnly) return { data: null, error: null, count };
     return single
-      ? { data: selected[0] || null, error: selected[0] ? null : { code: 'PGRST116', message: 'not found' } }
-      : { data: selected, error: null };
+      ? { data: selected[0] || null, error: selected[0] ? null : { code: 'PGRST116', message: 'not found' }, count }
+      : { data: selected, error: null, count };
   }
 }
 

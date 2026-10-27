@@ -14,6 +14,7 @@ export const TABLES = {
   userProblems: 'bohdi_user_problems',
   forumProblems: 'bohdi_forum_problems',
   problemAttempts: 'bohdi_problem_attempts',
+  levels: 'bohdi_levels',
 } as const;
 
 export const RPC = {
@@ -45,4 +46,5 @@ export const TABLE_COLUMNS: Record<string, readonly string[]> = {
   [TABLES.userProblems]: ['id', 'user_id', 'template_id', 'custom_words', 'difficulty_level', 'created_at', 'updated_at'],
   [TABLES.forumProblems]: ['id', 'user_id', 'template_id', 'custom_words', 'difficulty_level', 'is_active', 'created_at', 'updated_at'],
   [TABLES.problemAttempts]: ['id', 'problem_id', 'user_id', 'user_answer', 'correct_answer', 'is_correct', 'generated_numbers', 'created_at'],
+  [TABLES.levels]: ['id', 'owner_profile_id', 'shelf', 'file_name', 'level_name', 'sha256', 'bytes_b64', 'size_bytes', 'created_at'],
 };

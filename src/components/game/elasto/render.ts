@@ -1,5 +1,6 @@
-import { TUNING } from './physics';
-import type { SimState, Vec, WheelState } from './types';
+import { getPhysicsWorld, queryWorldEdges, TUNING, tuningForLevel } from './physics';
+import type { ElmaApple, SimState, Vec, WheelState } from './types';
+import { isElmaLevel } from './types';
 
 export interface Camera {
   x: number;
@@ -55,6 +56,18 @@ function tracePolygon(ctx: CanvasRenderingContext2D, polygon: Vec[]): void {
   ctx.closePath();
 }
 
+function segmentIntersectsView(a: Vec, b: Vec, minX: number, minY: number, maxX: number, maxY: number): boolean {
+  let lower = 0; let upper = 1;
+  const dx = b.x - a.x; const dy = b.y - a.y;
+  for (const [p, q] of [[-dx, a.x - minX], [dx, maxX - a.x], [-dy, a.y - minY], [dy, maxY - a.y]]) {
+    if (p === 0) { if (q < 0) return false; continue; }
+    const ratio = q / p;
+    if (p < 0) lower = Math.max(lower, ratio); else upper = Math.min(upper, ratio);
+    if (lower > upper) return false;
+  }
+  return true;
+}
+
 function drawBackground(ctx: CanvasRenderingContext2D, camera: Camera, view: View): void {
   const gradient = ctx.createLinearGradient(0, 0, 0, view.height);
   gradient.addColorStop(0, '#4A90D9');
@@ -82,43 +95,39 @@ function drawBackground(ctx: CanvasRenderingContext2D, camera: Camera, view: Vie
   }
 }
 
-function drawTerrain(ctx: CanvasRenderingContext2D, sim: SimState, scale: number): void {
-  const room = sim.level.polygons[0];
+function drawTerrain(ctx: CanvasRenderingContext2D, sim: SimState, camera: Camera, view: View, scale: number): void {
+  const world = getPhysicsWorld(sim.level);
+  const halfWidth = view.width / scale / 2 + 2;
+  const halfHeight = view.height / scale / 2 + 2;
   ctx.beginPath();
-  ctx.rect(-100, -100, 400, 300);
-  tracePolygon(ctx, room);
+  ctx.rect(camera.x - halfWidth - 1000, camera.y - halfHeight - 1000, halfWidth * 2 + 2000, halfHeight * 2 + 2000);
+  for (const polygon of world.solidPolygons) tracePolygon(ctx, polygon);
   ctx.fillStyle = groundPattern(ctx, scale);
   ctx.fill('evenodd');
-
-  for (const island of sim.level.polygons.slice(1)) {
-    ctx.beginPath();
-    tracePolygon(ctx, island);
-    ctx.fillStyle = groundPattern(ctx, scale);
-    ctx.fill();
-  }
-
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.lineWidth = 4 / scale;
   ctx.strokeStyle = '#1a1a1a';
-  for (const polygon of sim.level.polygons) {
+  const minX = camera.x - halfWidth; const minY = camera.y - halfHeight;
+  const maxX = camera.x + halfWidth; const maxY = camera.y + halfHeight;
+  const visibleEdges = queryWorldEdges(world, minX, minY, maxX, maxY)
+    .filter((edge) => segmentIntersectsView(edge.a, edge.b, minX, minY, maxX, maxY));
+  for (const edge of visibleEdges) {
     ctx.beginPath();
-    tracePolygon(ctx, polygon);
+    ctx.moveTo(edge.a.x, edge.a.y);
+    ctx.lineTo(edge.b.x, edge.b.y);
     ctx.stroke();
   }
-
   ctx.strokeStyle = '#98D8AA';
   ctx.lineWidth = 5 / scale;
-  for (let polygonIndex = 0; polygonIndex < sim.level.polygons.length; polygonIndex += 1) {
-    const polygon = sim.level.polygons[polygonIndex];
+  if (!isElmaLevel(sim.level)) for (const edge of visibleEdges) {
+    if (edge.airNormal.y > -0.45) continue;
+    ctx.beginPath(); ctx.moveTo(edge.a.x, edge.a.y); ctx.lineTo(edge.b.x, edge.b.y); ctx.stroke();
+  }
+  for (const polygon of world.grassPolygons) {
     for (let i = 0; i < polygon.length; i += 1) {
       const a = polygon[i];
       const b = polygon[(i + 1) % polygon.length];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const upNormalY = polygonIndex === 0 ? dx / length : -dx / length;
-      if (upNormalY > -0.45) continue;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -127,7 +136,8 @@ function drawTerrain(ctx: CanvasRenderingContext2D, sim: SimState, scale: number
   }
 }
 
-function drawApple(ctx: CanvasRenderingContext2D, p: Vec, time: number, scale: number): void {
+function drawApple(ctx: CanvasRenderingContext2D, apple: ElmaApple, time: number, scale: number): void {
+  const p = apple.p;
   const y = p.y + Math.sin(time * 2.4 + p.x) * 0.07;
   ctx.beginPath();
   ctx.arc(p.x, y, 0.22, 0, Math.PI * 2);
@@ -144,6 +154,17 @@ function drawApple(ctx: CanvasRenderingContext2D, p: Vec, time: number, scale: n
   ctx.arc(p.x - 0.07, y - 0.07, 0.035, 0, Math.PI * 2);
   ctx.fillStyle = '#fff';
   ctx.fill();
+  if (apple.gravity !== 'none') {
+    const arrows = { up: '↑', down: '↓', left: '←', right: '→' } as const;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2 / scale;
+    ctx.font = `${0.32}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText(arrows[apple.gravity], p.x, y);
+    ctx.fillText(arrows[apple.gravity], p.x, y);
+  }
 }
 
 function drawFlower(ctx: CanvasRenderingContext2D, p: Vec, time: number, scale: number): void {
@@ -223,6 +244,7 @@ function drawWheel(ctx: CanvasRenderingContext2D, wheel: WheelState, scale: numb
 
 function drawBike(ctx: CanvasRenderingContext2D, sim: SimState, scale: number, color: string): void {
   const { bike } = sim;
+  const tuning = tuningForLevel(sim.level);
   drawWheel(ctx, bike.rear, scale);
   drawWheel(ctx, bike.front, scale);
   ctx.save();
@@ -234,12 +256,12 @@ function drawBike(ctx: CanvasRenderingContext2D, sim: SimState, scale: number, c
   ctx.strokeStyle = '#1a1a1a';
   ctx.lineWidth = 4 / scale;
   ctx.beginPath();
-  ctx.moveTo(-0.62, 0.38);
+  ctx.moveTo(tuning.rearAnchorX, tuning.anchorY);
   ctx.lineTo(-0.15, -0.08);
-  ctx.lineTo(0.62, 0.38);
+  ctx.lineTo(tuning.frontAnchorX, tuning.anchorY);
   ctx.moveTo(-0.15, -0.08);
   ctx.lineTo(0.42, -0.05);
-  ctx.lineTo(0.62, 0.38);
+  ctx.lineTo(tuning.frontAnchorX, tuning.anchorY);
   ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(-0.35, -0.26);
@@ -264,7 +286,7 @@ function drawBike(ctx: CanvasRenderingContext2D, sim: SimState, scale: number, c
   ctx.lineTo(0.43, -0.35);
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(TUNING.headX, TUNING.headY, TUNING.headRadius, 0, Math.PI * 2);
+  ctx.arc(tuning.headX, tuning.headY, tuning.headRadius, 0, Math.PI * 2);
   ctx.fillStyle = '#f5e6c8';
   ctx.fill();
   ctx.stroke();
@@ -305,12 +327,13 @@ export function drawFrame(ctx: CanvasRenderingContext2D, sim: SimState, camera: 
   drawBackground(ctx, camera, view);
   ctx.translate(view.width / 2 - camera.x * scale, view.height * 0.55 - camera.y * scale);
   ctx.scale(scale, scale);
-  drawTerrain(ctx, sim, scale);
-  sim.level.apples.forEach((apple, index) => {
+  drawTerrain(ctx, sim, camera, view, scale);
+  const world = getPhysicsWorld(sim.level);
+  world.apples.forEach((apple, index) => {
     if (!sim.collected[index]) drawApple(ctx, apple, sim.time, scale);
   });
-  for (const killer of sim.level.killers) drawKiller(ctx, killer, sim.time, scale);
-  drawFlower(ctx, sim.level.flower, sim.time, scale);
+  for (const killer of world.killers) drawKiller(ctx, killer, sim.time, scale);
+  for (const exit of world.exits) drawFlower(ctx, exit, sim.time, scale);
   drawBike(ctx, sim, scale, view.riderColor ?? '#ff6b4a');
   ctx.restore();
 
@@ -323,7 +346,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, sim: SimState, camera: 
   shadowText(ctx, formatTime(sim.finishTime ?? sim.time), view.width / 2, 31, 'center');
   ctx.font = '18px VT323';
   const collected = sim.collected.filter(Boolean).length;
-  shadowText(ctx, `🍎 ${collected}/${sim.collected.length}`, view.width - 16, 22, 'right');
+  shadowText(ctx, `🍎 ${sim.collected.length - collected} LEFT`, view.width - 16, 22, 'right');
   if (view.bestTimeMs !== undefined) {
     ctx.font = '15px VT323';
     shadowText(ctx, `BEST ${formatMilliseconds(view.bestTimeMs)}`, view.width - 16, 40, 'right');
@@ -333,7 +356,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, sim: SimState, camera: 
     shadowText(ctx, 'GRAB ALL THE APPLES FIRST!', view.width / 2, 78, 'center');
     ctx.font = '20px VT323';
     shadowText(ctx, 'Missed one? Press R or RESTART to try again.', view.width / 2, 102, 'center');
-  } else if (sim.time < 6 && LEVEL_TIPS[sim.level.name]) {
+  } else if (!isElmaLevel(sim.level) && sim.time < 6 && LEVEL_TIPS[sim.level.name]) {
     ctx.font = '22px VT323';
     shadowText(ctx, LEVEL_TIPS[sim.level.name], view.width / 2, 80, 'center');
   }
