@@ -5,6 +5,16 @@ export function jsonError(error: string, status: number): NextResponse {
   return NextResponse.json({ error }, { status });
 }
 
+export function getClientIp(request: Request): string {
+  // Vercel supplies these headers at the edge. Keep the same precedence for every auth limiter.
+  return (
+    request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip')?.trim() ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
+  ).slice(0, 200);
+}
+
 export async function readJson(request: Request): Promise<Record<string, unknown> | null> {
   try {
     const value: unknown = await request.json();

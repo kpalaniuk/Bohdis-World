@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/server/db';
 import { RPC, TABLES } from '@/lib/server/tables';
-import { cleanUsername, jsonError, readJson } from '@/lib/server/http';
+import { cleanUsername, getClientIp, jsonError, readJson } from '@/lib/server/http';
 import { hashPassword, verifyPassword } from '@/lib/server/passwords';
 import { createSession, setSessionCookie } from '@/lib/server/session';
 
@@ -19,13 +19,7 @@ export async function POST(request: Request) {
   }
 
   const db = getDb();
-  // On Vercel these headers are set by the platform and cannot be spoofed by the client.
-  const ip = (
-    request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip')?.trim() ||
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    'unknown'
-  ).slice(0, 200);
+  const ip = getClientIp(request);
   const { data: user, error } = await db
     .from(TABLES.simpleUsers)
     .select('id, username, display_name, password_hash, created_at, role, can_gift_items, failed_login_count, locked_until')

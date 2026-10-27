@@ -4,6 +4,8 @@ export const TABLES = {
   userProgress: 'bohdi_user_progress',
   sessions: 'bohdi_sessions',
   loginFailures: 'bohdi_login_failures',
+  appSecrets: 'bohdi_app_secrets',
+  claimAttempts: 'bohdi_claim_attempts',
   calculationHistory: 'bohdi_calculation_history',
   mathHistory: 'bohdi_math_history',
   userActivities: 'bohdi_user_activities',
@@ -16,6 +18,7 @@ export const TABLES = {
 
 export const RPC = {
   registerLoginFailure: 'bohdi_register_login_failure',
+  registerClaimAttempt: 'bohdi_register_claim_attempt',
   giftCoins: 'bohdi_gift_coins',
 } as const;
 
@@ -32,6 +35,8 @@ export const TABLE_COLUMNS: Record<string, readonly string[]> = {
   [TABLES.userProgress]: ['id', 'user_id', 'coins', 'total_earned', 'high_score', 'unlocked_themes', 'unlocked_powerups', 'updated_at'],
   [TABLES.sessions]: ['id', 'user_id', 'token_hash', 'created_at', 'expires_at', 'last_seen_at'],
   [TABLES.loginFailures]: ['id', 'user_id', 'username', 'ip', 'failed_login_count', 'locked_until', 'updated_at'],
+  [TABLES.appSecrets]: ['key', 'value', 'expires_at', 'updated_at'],
+  [TABLES.claimAttempts]: ['ip', 'attempt_count', 'locked_until', 'updated_at'],
   [TABLES.calculationHistory]: ['id', 'user_id', 'expression', 'result', 'created_at'],
   [TABLES.mathHistory]: ['id', 'user_id', 'grade_level', 'problem', 'user_answer', 'correct_answer', 'is_correct', 'coins_earned', 'created_at'],
   [TABLES.userActivities]: ['id', 'user_id', 'activity_type', 'activity_data', 'created_at'],

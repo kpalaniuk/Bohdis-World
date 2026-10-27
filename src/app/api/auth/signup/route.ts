@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/server/db';
-import { TABLES } from '@/lib/server/tables';
+import { createUserAccount } from '@/lib/server/accounts';
 import { cleanUsername, jsonError, readJson, validDisplayName } from '@/lib/server/http';
-import { constantTimeSecretEqual, hashPassword } from '@/lib/server/passwords';
+import { constantTimeSecretEqual } from '@/lib/server/passwords';
 import { createSession, setSessionCookie } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
@@ -25,36 +24,13 @@ export async function POST(request: Request) {
     return jsonError('Invalid signup code', 403);
   }
 
-  const db = getDb();
-  const { data: existing } = await db.from(TABLES.simpleUsers).select('id').eq('username', username).single();
-  if (existing) return jsonError('Username already taken', 400);
-
-  const { data: user, error } = await db.from(TABLES.simpleUsers).insert({
+  const result = await createUserAccount(
     username,
-    password_hash: await hashPassword(password),
-    display_name: typeof requestedDisplayName === 'string' ? requestedDisplayName.trim() : username,
-    role: 'user',
-    can_gift_items: false,
-  }).select('id, username, display_name, created_at, role, can_gift_items').single();
-  if (error || !user) return jsonError('Failed to create account', 400);
-
-  const { data: profile, error: profileError } = await db.from(TABLES.userProfiles).insert({
-    simple_user_id: user.id,
-    username,
-  }).select('id').single();
-  if (profileError || !profile) {
-    await db.from(TABLES.simpleUsers).delete().eq('id', user.id);
-    return jsonError('Failed to create account', 400);
-  }
-  await db.from(TABLES.userProgress).insert({
-    user_id: profile.id,
-    coins: 0,
-    total_earned: 0,
-    high_score: 0,
-    unlocked_themes: ['default'],
-    unlocked_powerups: [],
-  });
-  await db.from(TABLES.userActivities).insert({ user_id: profile.id, activity_type: 'signup', activity_data: {} });
+    password,
+    typeof requestedDisplayName === 'string' ? requestedDisplayName.trim() : username,
+  );
+  if (!result.account) return jsonError(result.error, 400);
+  const { user } = result.account;
 
   const token = await createSession(user.id);
   const response = NextResponse.json({ user }, { status: 201 });

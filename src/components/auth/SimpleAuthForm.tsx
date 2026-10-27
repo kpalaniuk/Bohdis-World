@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAuthConfig } from '@/lib/simpleAuth';
+import { BohdiClaim } from './BohdiClaim';
 
 interface SimpleAuthFormProps {
   mode: 'signin' | 'signup';
@@ -18,11 +19,15 @@ export function SimpleAuthForm({ mode, onModeChange, onSuccess }: SimpleAuthForm
   const [displayName, setDisplayName] = useState('');
   const [signupCode, setSignupCode] = useState('');
   const [signupCodeRequired, setSignupCodeRequired] = useState(false);
+  const [bohdiClaimAvailable, setBohdiClaimAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    getAuthConfig().then(config => setSignupCodeRequired(config.signupCodeRequired));
+    getAuthConfig().then(config => {
+      setSignupCodeRequired(config.signupCodeRequired);
+      setBohdiClaimAvailable(config.bohdiClaimAvailable);
+    });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,7 +78,15 @@ export function SimpleAuthForm({ mode, onModeChange, onSuccess }: SimpleAuthForm
   `;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-sm">
+    <div className="w-full max-w-sm">
+      {mode === 'signin' && (
+        <BohdiClaim
+          available={bohdiClaimAvailable}
+          onClaimed={() => setBohdiClaimAvailable(false)}
+          onSuccess={onSuccess}
+        />
+      )}
+      <form onSubmit={handleSubmit} className="space-y-4 w-full">
       {/* Username Input */}
       <div>
         <label className="block font-lcd text-gray-300 mb-2 text-sm">
@@ -185,6 +198,7 @@ export function SimpleAuthForm({ mode, onModeChange, onSuccess }: SimpleAuthForm
           )}
         </button>
       </div>
-    </form>
+      </form>
+    </div>
   );
 }

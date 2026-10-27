@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { loadUserProgress, saveUserProgress, createAuthUserId } from '@/lib/syncProgress';
 import confetti from 'canvas-confetti';
 import { getAuthConfig } from '@/lib/simpleAuth';
+import { BohdiClaim } from '@/components/auth/BohdiClaim';
 
 interface GateOverlayProps {
   onUnlock: () => void;
@@ -34,11 +35,15 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
   const [displayName, setDisplayName] = useState('');
   const [signupCode, setSignupCode] = useState('');
   const [signupCodeRequired, setSignupCodeRequired] = useState(false);
+  const [bohdiClaimAvailable, setBohdiClaimAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    getAuthConfig().then(config => setSignupCodeRequired(config.signupCodeRequired));
+    getAuthConfig().then(config => {
+      setSignupCodeRequired(config.signupCodeRequired);
+      setBohdiClaimAvailable(config.bohdiClaimAvailable);
+    });
   }, []);
 
   // Create auth user ID for database operations
@@ -236,6 +241,13 @@ export function GateOverlay({ onUnlock }: GateOverlayProps) {
           <div className="border-t-4 border-pixel-shadow my-3 md:my-4" />
 
           {/* Login Form - compact on mobile */}
+          {authMode === 'signin' && (
+            <BohdiClaim
+              available={bohdiClaimAvailable}
+              onClaimed={() => setBohdiClaimAvailable(false)}
+              onSuccess={completeAndUnlock}
+            />
+          )}
           <form onSubmit={handleAuth} className="space-y-3 md:space-y-4">
             {/* Username Input */}
             <div>

@@ -1,7 +1,7 @@
 import { RPC, TABLE_COLUMNS, TABLES } from './tables';
 
 type Row = Record<string, any>;
-type Operation = 'select' | 'insert' | 'update' | 'delete';
+type Operation = 'select' | 'insert' | 'upsert' | 'update' | 'delete';
 
 function splitProjection(value: string): string[] {
   const parts: string[] = [];
@@ -44,10 +44,19 @@ class FakeQuery implements PromiseLike<{ data: any; error: any }> {
   private filters: Array<(row: Row) => boolean> = [];
   private maximum: number | null = null;
   private projection = '*';
+  private conflictColumn: string | null = null;
+  private ignoreDuplicates = false;
 
   constructor(private tables: Record<string, Row[]>, private table: string) {}
   select(columns = '*') { this.projection = columns; return this; }
   insert(values: Row | Row[]) { this.operation = 'insert'; this.values = values; return this; }
+  upsert(values: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }) {
+    this.operation = 'upsert';
+    this.values = values;
+    this.conflictColumn = options?.onConflict || null;
+    this.ignoreDuplicates = Boolean(options?.ignoreDuplicates);
+    return this;
+  }
   update(values: Row) { this.operation = 'update'; this.values = values; return this; }
   delete() { this.operation = 'delete'; return this; }
   eq(column: string, value: unknown) { this.filters.push(row => row[column] === value); return this; }
@@ -67,12 +76,29 @@ class FakeQuery implements PromiseLike<{ data: any; error: any }> {
     if (schemaError) return { data: null, error: { message: schemaError } };
     const rows = this.tables[this.table] ||= [];
     const matches = (row: Row) => this.filters.every(filter => filter(row));
-    if (this.operation === 'insert') {
-      const additions = (Array.isArray(this.values) ? this.values : [this.values]).filter(Boolean).map(value => ({
+    if (this.operation === 'insert' || this.operation === 'upsert') {
+      let additions = (Array.isArray(this.values) ? this.values : [this.values]).filter(Boolean).map(value => ({
         id: value!.id || crypto.randomUUID(), created_at: value!.created_at || new Date().toISOString(), ...value,
       }));
+      const returned: Row[] = [];
+      if (this.operation === 'upsert' && this.conflictColumn) {
+        const inserted: Row[] = [];
+        for (const addition of additions) {
+          const existing = rows.find(row => row[this.conflictColumn!] === addition[this.conflictColumn!]);
+          if (!existing) {
+            inserted.push(addition);
+            returned.push(addition);
+          } else if (!this.ignoreDuplicates) {
+            Object.assign(existing, addition);
+            returned.push(existing);
+          }
+        }
+        additions = inserted;
+      } else {
+        returned.push(...additions);
+      }
       rows.push(...additions);
-      return { data: single ? additions[0] : additions, error: null };
+      return { data: single ? returned[0] : returned, error: null };
     }
     if (this.operation === 'update') {
       const changed = rows.filter(matches);
@@ -98,6 +124,19 @@ export class FakeDb {
   }
   from(table: string) { return new FakeQuery(this.tables, table); }
   async rpc(name: string, parameters: Record<string, any>) {
+    if (name === RPC.registerClaimAttempt) {
+      const rows = this.tables[TABLES.claimAttempts];
+      let attempt = rows.find(row => row.ip === parameters.p_ip);
+      const now = Date.now();
+      if (!attempt) {
+        attempt = { ip: parameters.p_ip, attempt_count: 0, locked_until: null };
+        rows.push(attempt);
+      }
+      const expired = attempt.locked_until && new Date(attempt.locked_until).getTime() <= now;
+      attempt.attempt_count = expired ? 1 : attempt.attempt_count + 1;
+      attempt.locked_until = attempt.attempt_count >= 5 ? new Date(now + 5 * 60_000).toISOString() : null;
+      return { data: [{ attempt_count: attempt.attempt_count, locked_until: attempt.locked_until }], error: null };
+    }
     if (name === RPC.registerLoginFailure) {
       const rows = this.tables[TABLES.loginFailures];
       let failure = rows.find(row => row.username === parameters.p_username && row.ip === parameters.p_ip);
