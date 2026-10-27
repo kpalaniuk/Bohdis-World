@@ -8,6 +8,8 @@ import {
   signOutSimple,
   signInSimple,
   signUpSimple,
+  verifyBohdiAnswer,
+  claimBohdiAccount,
   isAdmin as checkIsAdmin,
   isSuperuser as checkIsSuperuser,
 } from '@/lib/simpleAuth';
@@ -47,6 +49,8 @@ interface AuthContextType {
   // Simple auth methods
   signInWithUsername: (username: string, password: string) => Promise<{ error: string | null }>;
   signUpWithUsername: (username: string, password: string, displayName?: string, code?: string) => Promise<{ error: string | null }>;
+  verifyBohdi: (answer: string) => Promise<{ error: string | null }>;
+  claimBohdi: (username: string, password: string, displayName?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -187,6 +191,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: result.error || 'Failed to sign up' };
   }, []);
 
+  const verifyBohdi = useCallback(async (answer: string) => {
+    const result = await verifyBohdiAnswer(answer);
+    return { error: result.ok ? null : result.error || 'Failed to check answer' };
+  }, []);
+
+  const claimBohdi = useCallback(async (username: string, password: string, displayName?: string) => {
+    const result = await claimBohdiAccount(username, password, displayName);
+    if (result.user) {
+      setSimpleUser(result.user);
+      hasSyncedRef.current = null;
+      return { error: null };
+    }
+    return { error: result.error || 'Failed to create account' };
+  }, []);
+
   const signOut = useCallback(async () => {
     // Reset sync ref on sign out
     hasSyncedRef.current = null;
@@ -215,6 +234,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isSuperuser,
       signInWithUsername,
       signUpWithUsername,
+      verifyBohdi,
+      claimBohdi,
       signOut,
     }}>
       {children}

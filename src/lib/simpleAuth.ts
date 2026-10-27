@@ -36,8 +36,29 @@ export async function signUpSimple(username: string, password: string, displayNa
   const result = await request<{ user: SimpleUser }>('/api/auth/signup', { method: 'POST', body: JSON.stringify({ username, password, displayName, code }) });
   return { user: result.data?.user || null, error: result.error };
 }
-export async function getAuthConfig(): Promise<{ signupCodeRequired: boolean }> {
-  return (await request<{ signupCodeRequired: boolean }>('/api/auth/config')).data || { signupCodeRequired: false };
+export interface AuthConfig {
+  signupCodeRequired: boolean;
+  bohdiClaimAvailable: boolean;
+}
+export async function getAuthConfig(): Promise<AuthConfig> {
+  return (await request<AuthConfig>('/api/auth/config')).data || {
+    signupCodeRequired: false,
+    bohdiClaimAvailable: false,
+  };
+}
+export async function verifyBohdiAnswer(answer: string) {
+  const result = await request<{ ok: true }>('/api/auth/bohdi/verify', {
+    method: 'POST',
+    body: JSON.stringify({ answer }),
+  });
+  return { ok: Boolean(result.data?.ok), error: result.error };
+}
+export async function claimBohdiAccount(username: string, password: string, displayName?: string) {
+  const result = await request<{ user: SimpleUser }>('/api/auth/bohdi/claim', {
+    method: 'POST',
+    body: JSON.stringify({ username, password, displayName }),
+  });
+  return { user: result.data?.user || null, error: result.error };
 }
 export async function signInSimple(username: string, password: string) {
   const result = await request<{ user: SimpleUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
