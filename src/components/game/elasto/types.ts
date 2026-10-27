@@ -12,6 +12,28 @@ export interface Level {
   flower: Vec;
 }
 
+export type GravityDirection = 'none' | 'up' | 'down' | 'left' | 'right';
+
+export interface ElmaApple {
+  p: Vec;
+  gravity: GravityDirection;
+  animation: number;
+}
+
+export interface ElmaLevel {
+  name: string;
+  polygons: { grass: boolean; vertices: Vec[] }[];
+  apples: ElmaApple[];
+  killers: Vec[];
+  exits: Vec[];
+  start: Vec;
+  lgr: string;
+  ground: string;
+  sky: string;
+}
+
+export type PlayableLevel = Level | ElmaLevel;
+
 export interface WheelState {
   p: Vec;
   v: Vec;
@@ -37,12 +59,15 @@ export interface Input {
   leanBack: boolean;
   leanForward: boolean;
   turnAround: boolean;
+  /** One-shot Elma rotation inputs. UI code emits these only on a key press/tap. */
+  voltBack?: boolean;
+  voltForward?: boolean;
 }
 
 export type SimStatus = 'playing' | 'crashing' | 'crashed' | 'finished';
 
 export interface SimState {
-  level: Level;
+  level: PlayableLevel;
   bike: BikeState;
   collected: boolean[];
   time: number;
@@ -51,4 +76,12 @@ export interface SimState {
   finishTime: number | null;
   flowerBlocked: boolean;
   applePickupCount: number;
+  gravity: Vec;
+  lastVoltBack: number;
+  lastVoltForward: number;
+  gasTime: number;
+}
+
+export function isElmaLevel(level: PlayableLevel): level is ElmaLevel {
+  return level.polygons.length === 0 || !Array.isArray(level.polygons[0]);
 }

@@ -11,6 +11,7 @@ import { LEVELS } from './elasto/levels';
 import { createSim, stepSim, TUNING } from './elasto/physics';
 import { drawFrame, type Camera } from './elasto/render';
 import type { Input, SimState } from './elasto/types';
+import ElmaLevelBrowser, { type LoadedLevel } from './ElmaLevelBrowser';
 
 const WIDTH = 960;
 const HEIGHT = 540;
@@ -32,7 +33,7 @@ function formatMs(ms?: number): string {
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+  return ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(target.tagName) || target.isContentEditable;
 }
 
 export default function ElastoBikeCanvas() {
@@ -42,22 +43,25 @@ export default function ElastoBikeCanvas() {
   const keysRef = useRef(new Set<string>());
   const touchKeysRef = useRef(new Set<string>());
   const turnQueuedRef = useRef(false);
+  const voltBackQueuedRef = useRef(false);
+  const voltForwardQueuedRef = useRef(false);
   const screenRef = useRef<Screen>('levels');
   const selectedRef = useRef(0);
   const levelIndexRef = useRef(0);
+  const activeLoadedRef = useRef<LoadedLevel | null>(null);
+  const zoomRef = useRef(1);
   const finishHandledRef = useRef(false);
   const lastPickupRef = useRef(0);
   const lastStatusRef = useRef<SimState['status']>('playing');
   const [screen, setScreenState] = useState<Screen>('levels');
   const [selected, setSelectedState] = useState(0);
   const [levelIndex, setLevelIndex] = useState(0);
+  const [isLoadedLevel, setIsLoadedLevel] = useState(false);
   const [finishInfo, setFinishInfo] = useState<FinishInfo | null>(null);
   const [crashCounts, setCrashCounts] = useState<Record<number, number>>({});
   const [isTouch] = useState(() => typeof window !== 'undefined' && (
     'ontouchstart' in window || navigator.maxTouchPoints > 0
   ));
-  const bestTimes = useElastoStore((state) => state.bestTimes);
-  const unlockedLevel = useElastoStore((state) => state.unlockedLevel);
 
   const setScreen = useCallback((next: Screen) => {
     screenRef.current = next;
@@ -72,18 +76,37 @@ export default function ElastoBikeCanvas() {
   const startLevel = useCallback((index: number) => {
     if (index > useElastoStore.getState().unlockedLevel) return;
     levelIndexRef.current = index;
+    activeLoadedRef.current = null;
+    setIsLoadedLevel(false);
     setLevelIndex(index);
     simRef.current = createSim(LEVELS[index]);
     cameraRef.current = { x: LEVELS[index].start.x, y: LEVELS[index].start.y };
     keysRef.current.clear();
     touchKeysRef.current.clear();
     turnQueuedRef.current = false;
+    voltBackQueuedRef.current = false; voltForwardQueuedRef.current = false;
     finishHandledRef.current = false;
     lastPickupRef.current = 0;
     lastStatusRef.current = 'playing';
     setFinishInfo(null);
     setScreen('playing');
   }, [setScreen]);
+
+  const startLoadedLevel = useCallback((loaded: LoadedLevel) => {
+    activeLoadedRef.current = loaded;
+    setIsLoadedLevel(true);
+    simRef.current = createSim(loaded.level);
+    cameraRef.current = { x: loaded.level.start.x, y: loaded.level.start.y };
+    keysRef.current.clear(); touchKeysRef.current.clear(); turnQueuedRef.current = false;
+    voltBackQueuedRef.current = false; voltForwardQueuedRef.current = false;
+    finishHandledRef.current = false; lastPickupRef.current = 0; lastStatusRef.current = 'playing';
+    setFinishInfo(null); setScreen('playing');
+  }, [setScreen]);
+
+  const restartActive = useCallback(() => {
+    const loaded = activeLoadedRef.current;
+    if (loaded) startLoadedLevel(loaded); else startLevel(levelIndexRef.current);
+  }, [startLevel, startLoadedLevel]);
 
   const showLevelList = useCallback(() => {
     keysRef.current.clear();
@@ -95,12 +118,12 @@ export default function ElastoBikeCanvas() {
   const finishLevel = useCallback((sim: SimState) => {
     if (finishHandledRef.current) return;
     finishHandledRef.current = true;
-    const index = levelIndexRef.current;
     const ms = Math.round((sim.finishTime ?? sim.time) * 1000);
-    const result = useElastoStore.getState().recordFinish(index, ms);
-    const coins = result.firstClear
-      ? 10 + 2 * sim.level.apples.length
-      : result.isNewBest ? 3 : 0;
+    const loaded = activeLoadedRef.current;
+    const result = loaded
+      ? { isNewBest: useElastoStore.getState().recordLoadedFinish(loaded.sha256, ms), firstClear: false }
+      : useElastoStore.getState().recordFinish(levelIndexRef.current, ms);
+    const coins = loaded ? 0 : result.firstClear ? 10 + 2 * sim.collected.length : result.isNewBest ? 3 : 0;
     if (coins > 0) useCoinStore.getState().addCoins(coins);
     if (useGameStore.getState().soundEnabled) playSound('powerup');
     if (result.isNewBest) {
@@ -123,31 +146,29 @@ export default function ElastoBikeCanvas() {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.code.startsWith('Arrow') || event.code === 'Space') event.preventDefault();
 
-      if (screenRef.current === 'levels') {
-        const unlocked = useElastoStore.getState().unlockedLevel;
-        if (event.code === 'ArrowLeft') setSelected(Math.max(0, selectedRef.current - 1));
-        if (event.code === 'ArrowRight') setSelected(Math.min(unlocked, selectedRef.current + 1));
-        if (event.code === 'ArrowUp') setSelected(Math.max(0, selectedRef.current - 5));
-        if (event.code === 'ArrowDown') setSelected(Math.min(unlocked, selectedRef.current + 5));
-        if (event.code === 'Enter') startLevel(selectedRef.current);
-        return;
-      }
+      if (screenRef.current === 'levels') return;
 
       if (event.code === 'Escape') {
         showLevelList();
         return;
       }
       if (event.code === 'KeyR') {
-        startLevel(levelIndexRef.current);
+        restartActive();
         return;
       }
       if (event.code === 'Enter' && screenRef.current === 'finished') {
-        if (levelIndexRef.current === LEVELS.length - 1) showLevelList();
+        if (activeLoadedRef.current || levelIndexRef.current === LEVELS.length - 1) showLevelList();
         else startLevel(levelIndexRef.current + 1);
         return;
       }
+      if (event.code === 'Equal' || event.code === 'NumpadAdd') { zoomRef.current = Math.min(2, zoomRef.current + 0.1); return; }
+      if (event.code === 'Minus' || event.code === 'NumpadSubtract') { zoomRef.current = Math.max(0.5, zoomRef.current - 0.1); return; }
       if (event.code === 'Space' && !event.repeat && screenRef.current === 'playing') {
         turnQueuedRef.current = true;
+      }
+      if (activeLoadedRef.current && !event.repeat && screenRef.current === 'playing') {
+        if (event.code === 'ArrowLeft' || event.code === 'KeyA') { voltBackQueuedRef.current = true; return; }
+        if (event.code === 'ArrowRight' || event.code === 'KeyD') { voltForwardQueuedRef.current = true; return; }
       }
       keysRef.current.add(event.code);
     };
@@ -166,7 +187,7 @@ export default function ElastoBikeCanvas() {
       window.removeEventListener('blur', clearHeld);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [setSelected, showLevelList, startLevel]);
+  }, [restartActive, showLevelList, startLevel]);
 
   useEffect(() => {
     let animationFrame = 0;
@@ -196,14 +217,19 @@ export default function ElastoBikeCanvas() {
           while (accumulator >= TUNING.DT) {
             const keys = keysRef.current;
             const touches = touchKeysRef.current;
+            const loaded = activeLoadedRef.current !== null;
             const input: Input = {
               gas: keys.has('ArrowUp') || keys.has('KeyW') || touches.has('gas'),
               brake: keys.has('ArrowDown') || keys.has('KeyS') || touches.has('brake'),
-              leanBack: keys.has('ArrowLeft') || keys.has('KeyA') || touches.has('back'),
-              leanForward: keys.has('ArrowRight') || keys.has('KeyD') || touches.has('forward'),
+              leanBack: !loaded && (keys.has('ArrowLeft') || keys.has('KeyA') || touches.has('back')),
+              leanForward: !loaded && (keys.has('ArrowRight') || keys.has('KeyD') || touches.has('forward')),
               turnAround: turnQueuedRef.current,
+              voltBack: voltBackQueuedRef.current,
+              voltForward: voltForwardQueuedRef.current,
             };
             turnQueuedRef.current = false;
+            voltBackQueuedRef.current = false;
+            voltForwardQueuedRef.current = false;
             stepSim(sim, input, TUNING.DT);
             if (sim.applePickupCount > lastPickupRef.current) {
               lastPickupRef.current = sim.applePickupCount;
@@ -246,9 +272,11 @@ export default function ElastoBikeCanvas() {
           width: WIDTH,
           height: HEIGHT,
           dpr,
-          scale: 42,
+          scale: 26 * zoomRef.current,
           riderColor,
-          bestTimeMs: useElastoStore.getState().bestTimes[levelIndexRef.current],
+          bestTimeMs: activeLoadedRef.current
+            ? useElastoStore.getState().loadedBestTimes[activeLoadedRef.current.sha256]
+            : useElastoStore.getState().bestTimes[levelIndexRef.current],
         });
         animationFrame = requestAnimationFrame(frame);
       };
@@ -264,6 +292,8 @@ export default function ElastoBikeCanvas() {
   const holdHandlers = (control: string) => ({
     onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
       event.currentTarget.setPointerCapture(event.pointerId);
+      if (activeLoadedRef.current && control === 'back') { voltBackQueuedRef.current = true; return; }
+      if (activeLoadedRef.current && control === 'forward') { voltForwardQueuedRef.current = true; return; }
       touchKeysRef.current.add(control);
     },
     onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -278,7 +308,7 @@ export default function ElastoBikeCanvas() {
     onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
       event.currentTarget.setPointerCapture(event.pointerId);
       if (action === 'flip') turnQueuedRef.current = true;
-      else startLevel(levelIndex);
+      else restartActive();
     },
     onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => {
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
@@ -298,42 +328,22 @@ export default function ElastoBikeCanvas() {
           aria-label="Elasto Bike game"
         />
 
-        {screen === 'levels' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-pixel-black/80 p-3 sm:p-6">
-            <h2 className="mb-3 font-pixel text-sm text-foamy-green sm:mb-5 sm:text-xl">CHOOSE A LEVEL</h2>
-            <div className="grid w-full max-w-4xl grid-cols-5 gap-1.5 sm:gap-3">
-              {LEVELS.map((level, index) => {
-                const locked = index > unlockedLevel;
-                return (
-                  <button
-                    key={level.name}
-                    type="button"
-                    disabled={locked}
-                    onClick={() => {
-                      setSelected(index);
-                      startLevel(index);
-                    }}
-                    className={`min-h-20 border-2 p-1 text-center transition-colors sm:min-h-28 sm:p-2 ${selected === index ? 'border-foamy-green bg-ocean-blue/70' : 'border-white/40 bg-pixel-shadow/80'} ${locked ? 'cursor-not-allowed opacity-45' : 'hover:border-foamy-green'}`}
-                  >
-                    <span className="block font-pixel text-xs text-sand-beige sm:text-base">{locked ? '🔒' : index + 1}</span>
-                    <span className="mt-1 block font-pixel text-[6px] leading-3 text-white sm:text-[9px]">{level.name}</span>
-                    <span className="mt-1 block font-lcd text-[10px] text-yellow-300 sm:text-sm">{formatMs(bestTimes[index])}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-3 font-lcd text-sm text-sand-beige sm:text-lg">ARROWS + ENTER, OR TAP</p>
-          </div>
-        )}
+        <ElmaLevelBrowser
+          visible={screen === 'levels'}
+          selectedBuiltIn={selected}
+          onSelectBuiltIn={setSelected}
+          onPlayBuiltIn={startLevel}
+          onPlayLoaded={startLoadedLevel}
+        />
 
         {screen === 'crashed' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-pixel-black/70">
             <h2 className="font-pixel text-3xl text-sunset-orange">OUCH!</h2>
             <p className="mt-4 font-lcd text-2xl text-white">R to retry</p>
             <div className="mt-5 flex gap-3">
-              <button type="button" onClick={() => startLevel(levelIndex)} className={touchButton}>RETRY</button>
+              <button type="button" onClick={restartActive} className={touchButton}>RETRY</button>
               <button type="button" onClick={showLevelList} className={touchButton}>LEVELS</button>
-              {levelIndex < LEVELS.length - 1 && (crashCounts[levelIndex] ?? 0) >= 8 && (
+              {!isLoadedLevel && levelIndex < LEVELS.length - 1 && (crashCounts[levelIndex] ?? 0) >= 8 && (
                 <button
                   type="button"
                   onClick={() => {
@@ -356,15 +366,15 @@ export default function ElastoBikeCanvas() {
             <h2 className="font-pixel text-2xl text-foamy-green sm:text-3xl">FINISHED!</h2>
             <p className="mt-3 font-lcd text-3xl text-white">{formatMs(finishInfo.ms)}</p>
             {finishInfo.isNewBest && <p className="mt-1 font-pixel text-sm text-yellow-300">NEW BEST!</p>}
-            <p className="mt-2 font-lcd text-xl text-yellow-300">+{finishInfo.coins} COINS</p>
-            {levelIndex === LEVELS.length - 1 && (
+            {!isLoadedLevel && <p className="mt-2 font-lcd text-xl text-yellow-300">+{finishInfo.coins} COINS</p>}
+            {!isLoadedLevel && levelIndex === LEVELS.length - 1 && (
               <p className="mt-3 font-pixel text-sm text-coral-pink">YOU BEAT ALL 10!</p>
             )}
             <div className="mt-5 flex gap-2">
-              {levelIndex < LEVELS.length - 1 && (
+              {!isLoadedLevel && levelIndex < LEVELS.length - 1 && (
                 <button type="button" onClick={() => startLevel(levelIndex + 1)} className={touchButton}>NEXT</button>
               )}
-              <button type="button" onClick={() => startLevel(levelIndex)} className={touchButton}>RETRY</button>
+              <button type="button" onClick={restartActive} className={touchButton}>RETRY</button>
               <button type="button" onClick={showLevelList} className={touchButton}>LEVELS</button>
             </div>
             <p className="mt-3 font-lcd text-base text-gray-200">Enter = next · R = retry · Esc = levels</p>
