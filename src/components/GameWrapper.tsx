@@ -45,7 +45,11 @@ export function GameWrapper({ children }: GameWrapperProps) {
   // Prevent hydration mismatch
   if (!isClient) {
     return (
-      <div className="min-h-screen bg-pixel-black flex items-center justify-center">
+      <div className="min-h-screen bg-pixel-black flex flex-col items-center justify-center gap-4 px-4 text-center">
+        <h1 className="font-pixel text-foamy-green text-lg">BOHDI&apos;S WORLD</h1>
+        <p className="font-lcd text-white text-xl max-w-md">
+          A student learning project: learning to code and use AI by building math games.
+        </p>
         <div className="font-pixel text-foamy-green animate-pulse">LOADING...</div>
       </div>
     );
